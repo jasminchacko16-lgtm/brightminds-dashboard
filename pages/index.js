@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ChevronDown, ChevronUp, UserPlus, X, CheckCircle, Circle, Plus, Trash2, Lock, Eye, AlertCircle, Save, Loader, RefreshCw } from 'lucide-react';
+import { ChevronRight, Plus, X, Check, Lock, Eye, AlertCircle, RefreshCw, User, Calendar, FileText, Activity, Heart } from 'lucide-react';
 
 const SUPABASE_URL = 'https://igkwugfefllkutthnjwi.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlna3d1Z2ZlZmxsa3V0dGhuandpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgxNTUxMTIsImV4cCI6MjA4MzczMTExMn0.w9vE39YSYiwGRl9saT9pUpde57XMTTyUjDw-v2sc12o';
@@ -7,7 +7,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const supabase = {
   from: (table) => ({
     select: async () => {
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=*`, {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=*&order=id.desc`, {
         headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
       });
       const data = await res.json();
@@ -50,56 +50,23 @@ const swAssess = ['SES Assessment', 'Eco-Map', 'Genogram', 'Family Needs', 'CANS
 const itpDisc = ['Psychiatry', 'Psychology', 'ABA', 'SLP', 'OT', 'Social Work'];
 const emptyITP = () => ({ goals: [], signoffs: { parent: { signed: false, date: '' }, socialWorker: { signed: false, date: '' }, psychiatry: { signed: false, date: '' }, psychology: { signed: false, date: '' }, aba: { signed: false, date: '' }, slp: { signed: false, date: '' }, ot: { signed: false, date: '' } }, finalized: false, finalizedDate: '', editRequests: [] });
 
-const toDb = (p) => ({
-  case_id: p.caseId,
-  first_name: p.firstName,
-  last_name: p.lastName,
-  dob: p.dob || null,
-  parent_name: p.parentName,
-  insurance: p.insurance,
-  primary_dx: p.primaryDx,
-  parent_intake_complete: p.parentIntakeComplete,
-  diagnostic_assessments: p.diagnosticAssessments,
-  social_work_assessments: p.socialWorkAssessments,
-  itp: p.itp,
-  treatment_start_date: p.treatmentStartDate || null
-});
-
-const fromDb = (r) => ({
-  id: r.id,
-  caseId: r.case_id,
-  firstName: r.first_name || '',
-  lastName: r.last_name || '',
-  dob: r.dob || '',
-  parentName: r.parent_name || '',
-  insurance: r.insurance || '',
-  primaryDx: r.primary_dx || '',
-  parentIntakeComplete: r.parent_intake_complete || false,
-  diagnosticAssessments: r.diagnostic_assessments || { ABA: [], Psychiatry: [], Psychology: [], SLP: [], OT: [] },
-  socialWorkAssessments: r.social_work_assessments || [],
-  itp: r.itp || emptyITP(),
-  treatmentStartDate: r.treatment_start_date || null
-});
+const toDb = (p) => ({ case_id: p.caseId, first_name: p.firstName, last_name: p.lastName, dob: p.dob || null, parent_name: p.parentName, insurance: p.insurance, primary_dx: p.primaryDx, parent_intake_complete: p.parentIntakeComplete, diagnostic_assessments: p.diagnosticAssessments, social_work_assessments: p.socialWorkAssessments, itp: p.itp, treatment_start_date: p.treatmentStartDate || null });
+const fromDb = (r) => ({ id: r.id, caseId: r.case_id, firstName: r.first_name || '', lastName: r.last_name || '', dob: r.dob || '', parentName: r.parent_name || '', insurance: r.insurance || '', primaryDx: r.primary_dx || '', parentIntakeComplete: r.parent_intake_complete || false, diagnosticAssessments: r.diagnostic_assessments || { ABA: [], Psychiatry: [], Psychology: [], SLP: [], OT: [] }, socialWorkAssessments: r.social_work_assessments || [], itp: r.itp || emptyITP(), treatmentStartDate: r.treatment_start_date || null });
 
 export default function Dashboard() {
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [lastSaved, setLastSaved] = useState(null);
-  const [expandedId, setExpandedId] = useState(null);
-  const [patientTab, setPatientTab] = useState('info');
-  const [phaseFilter, setPhaseFilter] = useState("All");
-  const [showPreview, setShowPreview] = useState(null);
-  const [showFinalize, setShowFinalize] = useState(null);
-  const [editReason, setEditReason] = useState('');
-  const [showEditReq, setShowEditReq] = useState(null);
+  const [selectedPt, setSelectedPt] = useState(null);
+  const [activeSection, setActiveSection] = useState('info');
   const [showAdd, setShowAdd] = useState(false);
-  const [newPt, setNewPt] = useState({ caseId: '', firstName: '', lastName: '', dob: '', parentName: '', insurance: '', primaryDx: '' });
+  const [showPreview, setShowPreview] = useState(null);
+  const [newPt, setNewPt] = useState({ caseId: '', firstName: '', lastName: '', dob: '', primaryDx: '' });
 
   const loadPatients = async () => {
     setLoading(true);
-    const { data, error } = await supabase.from('patients').select();
-    if (!error && data) setPatients(data.map(fromDb));
+    const { data } = await supabase.from('patients').select();
+    if (data) setPatients(data.map(fromDb));
     setLoading(false);
   };
 
@@ -108,47 +75,48 @@ export default function Dashboard() {
   const savePatient = async (pt) => {
     setSaving(true);
     await supabase.from('patients').update(toDb(pt)).eq('id', pt.id);
-    setLastSaved(new Date().toLocaleTimeString());
     setSaving(false);
   };
 
   const getPhase = (p) => {
-    if (p.treatmentStartDate) return "Treatment";
+    if (p.treatmentStartDate) return { label: "Treatment", color: "emerald" };
     const diagDone = p.parentIntakeComplete && Object.values(p.diagnosticAssessments).flat().length === Object.values(diagAssess).flat().length;
-    if (!diagDone) return "Diagnostic";
-    if (p.socialWorkAssessments.length < swAssess.length) return "Assessment";
+    if (!diagDone) return { label: "Diagnostic", color: "amber" };
+    if (p.socialWorkAssessments.length < swAssess.length) return { label: "Assessment", color: "blue" };
     const allSigned = Object.values(p.itp.signoffs).every(s => s.signed);
-    return (p.itp.finalized || allSigned) ? "Ready for Treatment" : "ITP Development";
+    return (p.itp.finalized || allSigned) ? { label: "Ready", color: "indigo" } : { label: "ITP", color: "violet" };
   };
 
-  const phaseColors = { "Diagnostic": "bg-amber-100 text-amber-800", "Assessment": "bg-blue-100 text-blue-800", "ITP Development": "bg-purple-100 text-purple-800", "Ready for Treatment": "bg-indigo-100 text-indigo-800", "Treatment": "bg-green-100 text-green-800" };
-  const phaseDots = { "Diagnostic": "bg-amber-500", "Assessment": "bg-blue-500", "ITP Development": "bg-purple-500", "Ready for Treatment": "bg-indigo-500", "Treatment": "bg-green-500" };
-
-  const getDiagProg = (p) => Math.round(((Object.values(p.diagnosticAssessments).flat().length + (p.parentIntakeComplete ? 1 : 0)) / (Object.values(diagAssess).flat().length + 1)) * 100);
-  const getSWProg = (p) => Math.round((p.socialWorkAssessments.length / swAssess.length) * 100);
-  const getITPProg = (p) => Math.round((Object.values(p.itp.signoffs).filter(s => s.signed).length / 7) * 100);
-  const allSigned = (p) => Object.values(p.itp.signoffs).every(s => s.signed);
-
-  const stats = { total: patients.length, diagnostic: patients.filter(p => getPhase(p) === "Diagnostic").length, assessment: patients.filter(p => getPhase(p) === "Assessment").length, itp: patients.filter(p => getPhase(p) === "ITP Development").length, treatment: patients.filter(p => getPhase(p) === "Treatment").length };
-  const filtered = phaseFilter === "All" ? patients : patients.filter(p => getPhase(p) === phaseFilter);
+  const getProgress = (p) => {
+    const phase = getPhase(p).label;
+    if (phase === "Diagnostic") return Math.round(((Object.values(p.diagnosticAssessments).flat().length + (p.parentIntakeComplete ? 1 : 0)) / (Object.values(diagAssess).flat().length + 1)) * 100);
+    if (phase === "Assessment") return Math.round((p.socialWorkAssessments.length / swAssess.length) * 100);
+    if (phase === "ITP") return Math.round((Object.values(p.itp.signoffs).filter(s => s.signed).length / 7) * 100);
+    return 100;
+  };
 
   const updatePt = async (id, u) => {
     const updated = patients.map(p => p.id === id ? { ...p, ...u } : p);
     setPatients(updated);
     const pt = updated.find(p => p.id === id);
+    if (selectedPt?.id === id) setSelectedPt(pt);
     await savePatient(pt);
   };
 
   const toggleDiag = async (id, disc, a) => {
     const updated = patients.map(p => p.id === id ? { ...p, diagnosticAssessments: { ...p.diagnosticAssessments, [disc]: p.diagnosticAssessments[disc].includes(a) ? p.diagnosticAssessments[disc].filter(x => x !== a) : [...p.diagnosticAssessments[disc], a] } } : p);
     setPatients(updated);
-    await savePatient(updated.find(p => p.id === id));
+    const pt = updated.find(p => p.id === id);
+    if (selectedPt?.id === id) setSelectedPt(pt);
+    await savePatient(pt);
   };
 
   const toggleSW = async (id, a) => {
     const updated = patients.map(p => p.id === id ? { ...p, socialWorkAssessments: p.socialWorkAssessments.includes(a) ? p.socialWorkAssessments.filter(x => x !== a) : [...p.socialWorkAssessments, a] } : p);
     setPatients(updated);
-    await savePatient(updated.find(p => p.id === id));
+    const pt = updated.find(p => p.id === id);
+    if (selectedPt?.id === id) setSelectedPt(pt);
+    await savePatient(pt);
   };
 
   const toggleSign = async (id, role) => {
@@ -156,28 +124,25 @@ export default function Dashboard() {
     if (pt.itp.finalized) return;
     const updated = patients.map(p => p.id === id ? { ...p, itp: { ...p.itp, signoffs: { ...p.itp.signoffs, [role]: { signed: !p.itp.signoffs[role].signed, date: !p.itp.signoffs[role].signed ? new Date().toISOString().split('T')[0] : '' } } } } : p);
     setPatients(updated);
-    await savePatient(updated.find(p => p.id === id));
+    const upt = updated.find(p => p.id === id);
+    if (selectedPt?.id === id) setSelectedPt(upt);
+    await savePatient(upt);
   };
 
   const finalize = async (id) => {
     const updated = patients.map(p => p.id === id ? { ...p, itp: { ...p.itp, finalized: true, finalizedDate: new Date().toISOString().split('T')[0] } } : p);
     setPatients(updated);
-    await savePatient(updated.find(p => p.id === id));
-    setShowFinalize(null);
-  };
-
-  const reqEdit = async (id, reason) => {
-    const updated = patients.map(p => p.id === id ? { ...p, itp: { ...p.itp, editRequests: [...p.itp.editRequests, { date: new Date().toISOString().split('T')[0], reason }] } } : p);
-    setPatients(updated);
-    await savePatient(updated.find(p => p.id === id));
-    setShowEditReq(null);
-    setEditReason('');
+    const pt = updated.find(p => p.id === id);
+    if (selectedPt?.id === id) setSelectedPt(pt);
+    await savePatient(pt);
   };
 
   const unlock = async (id) => {
-    const updated = patients.map(p => p.id === id ? { ...p, itp: { ...p.itp, finalized: false, finalizedDate: '' } } : p);
+    const updated = patients.map(p => p.id === id ? { ...p, itp: { ...p.itp, finalized: false, finalizedDate: '', editRequests: [...p.itp.editRequests, { date: new Date().toISOString().split('T')[0], reason: 'Unlocked' }] } } : p);
     setPatients(updated);
-    await savePatient(updated.find(p => p.id === id));
+    const pt = updated.find(p => p.id === id);
+    if (selectedPt?.id === id) setSelectedPt(pt);
+    await savePatient(pt);
   };
 
   const addGoal = async (id) => {
@@ -185,7 +150,9 @@ export default function Dashboard() {
     if (pt.itp.finalized) return;
     const updated = patients.map(p => p.id === id ? { ...p, itp: { ...p.itp, goals: [...p.itp.goals, { id: Date.now(), discipline: '', domain: '', longTermGoal: '', shortTermGoals: [{ goal: '', measure: '', criteria: '' }] }] } } : p);
     setPatients(updated);
-    await savePatient(updated.find(p => p.id === id));
+    const upt = updated.find(p => p.id === id);
+    if (selectedPt?.id === id) setSelectedPt(upt);
+    await savePatient(upt);
   };
 
   const updateGoal = async (pId, gId, f, v) => {
@@ -193,7 +160,9 @@ export default function Dashboard() {
     if (pt.itp.finalized) return;
     const updated = patients.map(p => p.id === pId ? { ...p, itp: { ...p.itp, goals: p.itp.goals.map(g => g.id === gId ? { ...g, [f]: v } : g) } } : p);
     setPatients(updated);
-    await savePatient(updated.find(p => p.id === pId));
+    const upt = updated.find(p => p.id === pId);
+    if (selectedPt?.id === pId) setSelectedPt(upt);
+    await savePatient(upt);
   };
 
   const removeGoal = async (pId, gId) => {
@@ -201,7 +170,9 @@ export default function Dashboard() {
     if (pt.itp.finalized) return;
     const updated = patients.map(p => p.id === pId ? { ...p, itp: { ...p.itp, goals: p.itp.goals.filter(g => g.id !== gId) } } : p);
     setPatients(updated);
-    await savePatient(updated.find(p => p.id === pId));
+    const upt = updated.find(p => p.id === pId);
+    if (selectedPt?.id === pId) setSelectedPt(upt);
+    await savePatient(upt);
   };
 
   const addSTG = async (pId, gId) => {
@@ -209,7 +180,9 @@ export default function Dashboard() {
     if (pt.itp.finalized) return;
     const updated = patients.map(p => p.id === pId ? { ...p, itp: { ...p.itp, goals: p.itp.goals.map(g => g.id === gId ? { ...g, shortTermGoals: [...g.shortTermGoals, { goal: '', measure: '', criteria: '' }] } : g) } } : p);
     setPatients(updated);
-    await savePatient(updated.find(p => p.id === pId));
+    const upt = updated.find(p => p.id === pId);
+    if (selectedPt?.id === pId) setSelectedPt(upt);
+    await savePatient(upt);
   };
 
   const updateSTG = async (pId, gId, idx, f, v) => {
@@ -217,186 +190,572 @@ export default function Dashboard() {
     if (pt.itp.finalized) return;
     const updated = patients.map(p => p.id === pId ? { ...p, itp: { ...p.itp, goals: p.itp.goals.map(g => g.id === gId ? { ...g, shortTermGoals: g.shortTermGoals.map((s, i) => i === idx ? { ...s, [f]: v } : s) } : g) } } : p);
     setPatients(updated);
-    await savePatient(updated.find(p => p.id === pId));
-  };
-
-  const removeSTG = async (pId, gId, idx) => {
-    const pt = patients.find(p => p.id === pId);
-    if (pt.itp.finalized) return;
-    const updated = patients.map(p => p.id === pId ? { ...p, itp: { ...p.itp, goals: p.itp.goals.map(g => g.id === gId ? { ...g, shortTermGoals: g.shortTermGoals.filter((_, i) => i !== idx) } : g) } } : p);
-    setPatients(updated);
-    await savePatient(updated.find(p => p.id === pId));
+    const upt = updated.find(p => p.id === pId);
+    if (selectedPt?.id === pId) setSelectedPt(upt);
+    await savePatient(upt);
   };
 
   const deletePt = async (id) => {
     if (confirm('Delete this patient?')) {
       await supabase.from('patients').delete().eq('id', id);
       setPatients(patients.filter(p => p.id !== id));
+      if (selectedPt?.id === id) setSelectedPt(null);
     }
   };
 
   const addPatient = async () => {
     if (!newPt.caseId) return;
     const pt = { ...newPt, parentIntakeComplete: false, diagnosticAssessments: { ABA: [], Psychiatry: [], Psychology: [], SLP: [], OT: [] }, socialWorkAssessments: [], itp: emptyITP(), treatmentStartDate: null };
-    const { data, error } = await supabase.from('patients').insert([toDb(pt)]);
-    if (!error && data) {
-      setPatients([...patients, fromDb(data[0])]);
-    }
-    setNewPt({ caseId: '', firstName: '', lastName: '', dob: '', parentName: '', insurance: '', primaryDx: '' });
+    const { data } = await supabase.from('patients').insert([toDb(pt)]);
+    if (data) setPatients([fromDb(data[0]), ...patients]);
+    setNewPt({ caseId: '', firstName: '', lastName: '', dob: '', primaryDx: '' });
     setShowAdd(false);
   };
 
-  if (loading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><Loader className="w-8 h-8 animate-spin text-indigo-600" /><span className="ml-2">Loading...</span></div>;
+  const allSigned = (p) => Object.values(p.itp.signoffs).every(s => s.signed);
+
+  if (loading) return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
+      <div className="flex flex-col items-center gap-4">
+        <div className="w-12 h-12 border-4 border-slate-200 border-t-slate-600 rounded-full animate-spin"></div>
+        <p className="text-slate-400 text-sm font-medium tracking-wide">Loading</p>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-gray-50 p-3">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-start mb-3">
-          <div><h1 className="text-xl font-bold text-gray-900">Bright Minds Pilot</h1><p className="text-gray-500 text-xs">Social Worker Dashboard</p></div>
-          <div className="flex items-center gap-2">
-            <button onClick={loadPatients} className="flex items-center gap-1 text-xs text-gray-500 hover:text-indigo-600"><RefreshCw className="w-3 h-3" />Refresh</button>
-            <div className="text-xs text-gray-500">{saving ? <><Loader className="w-3 h-3 animate-spin inline" /> Saving...</> : lastSaved && <><Save className="w-3 h-3 text-green-600 inline" /> Saved {lastSaved}</>}</div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
+      {/* Header */}
+      <header className="sticky top-0 z-40 backdrop-blur-xl bg-white/70 border-b border-slate-200/50">
+        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center shadow-lg shadow-teal-500/20">
+              <Heart className="w-5 h-5 text-white" strokeWidth={2.5} />
+            </div>
+            <div>
+              <h1 className="text-lg font-semibold text-slate-800 tracking-tight">Bright Minds</h1>
+              <p className="text-xs text-slate-400 -mt-0.5">Clinical Dashboard</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            {saving && <span className="text-xs text-slate-400">Saving...</span>}
+            <button onClick={loadPatients} className="p-2 rounded-full hover:bg-slate-100 transition-colors">
+              <RefreshCw className="w-4 h-4 text-slate-400" />
+            </button>
+            <button onClick={() => setShowAdd(true)} className="h-9 px-4 bg-slate-900 text-white text-sm font-medium rounded-full hover:bg-slate-800 transition-all hover:shadow-lg hover:shadow-slate-900/20 flex items-center gap-2">
+              <Plus className="w-4 h-4" />
+              <span>New Patient</span>
+            </button>
           </div>
         </div>
-        
-        <div className="bg-green-50 border border-green-200 rounded-lg p-2 mb-3 text-xs text-green-800">
-          <strong>✓ Shared Database:</strong> All team members see the same data. Use case IDs (e.g., BM-001) for privacy.
-        </div>
+      </header>
 
-        <div className="grid grid-cols-5 gap-2 mb-3">
-          {[{l:'Total',v:stats.total,c:'bg-gray-500'},{l:'Diagnostic',v:stats.diagnostic,c:'bg-amber-500'},{l:'Assessment',v:stats.assessment,c:'bg-blue-500'},{l:'ITP',v:stats.itp,c:'bg-purple-500'},{l:'Treatment',v:stats.treatment,c:'bg-green-500'}].map(s => (
-            <div key={s.l} className="bg-white rounded-lg p-2 shadow-sm border"><div className="flex items-center gap-2"><div className={`w-2 h-2 rounded-full ${s.c}`}></div><div><p className="text-lg font-bold">{s.v}</p><p className="text-xs text-gray-500">{s.l}</p></div></div></div>
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        {/* Stats */}
+        <div className="grid grid-cols-5 gap-4 mb-8">
+          {[
+            { label: 'Total', value: patients.length, color: 'slate' },
+            { label: 'Diagnostic', value: patients.filter(p => getPhase(p).label === "Diagnostic").length, color: 'amber' },
+            { label: 'Assessment', value: patients.filter(p => getPhase(p).label === "Assessment").length, color: 'blue' },
+            { label: 'ITP', value: patients.filter(p => getPhase(p).label === "ITP").length, color: 'violet' },
+            { label: 'Treatment', value: patients.filter(p => getPhase(p).label === "Treatment").length, color: 'emerald' },
+          ].map(s => (
+            <div key={s.label} className="bg-white rounded-2xl p-5 shadow-sm shadow-slate-200/50 border border-slate-100 hover:shadow-md hover:shadow-slate-200/50 transition-shadow">
+              <p className="text-3xl font-semibold text-slate-800">{s.value}</p>
+              <p className="text-sm text-slate-400 mt-1">{s.label}</p>
+            </div>
           ))}
         </div>
 
-        <div className="flex justify-between items-center mb-2">
-          <div className="flex gap-1 flex-wrap">{["All", "Diagnostic", "Assessment", "ITP Development", "Ready for Treatment", "Treatment"].map(s => (<button key={s} onClick={() => setPhaseFilter(s)} className={`px-2 py-1 rounded-full text-xs font-medium ${phaseFilter === s ? 'bg-indigo-600 text-white' : 'bg-white border text-gray-600'}`}>{s}</button>))}</div>
-          <button onClick={() => setShowAdd(true)} className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-medium"><UserPlus className="w-3 h-3" />Add Patient</button>
-        </div>
-
-        {showAdd && (
-          <div className="bg-white rounded-xl shadow-sm border p-4 mb-3">
-            <div className="flex justify-between items-center mb-3"><p className="font-semibold">Add New Patient</p><button onClick={() => setShowAdd(false)}><X className="w-4 h-4" /></button></div>
-            <div className="grid grid-cols-4 gap-3 mb-3">
-              <input type="text" value={newPt.caseId} onChange={e => setNewPt({...newPt, caseId: e.target.value})} placeholder="Case ID (e.g. BM-002) *" className="border rounded-lg p-2 text-sm" />
-              <input type="text" value={newPt.firstName} onChange={e => setNewPt({...newPt, firstName: e.target.value})} placeholder="First Name/Initial" className="border rounded-lg p-2 text-sm" />
-              <input type="text" value={newPt.lastName} onChange={e => setNewPt({...newPt, lastName: e.target.value})} placeholder="Last Name/Initial" className="border rounded-lg p-2 text-sm" />
-              <input type="text" value={newPt.primaryDx} onChange={e => setNewPt({...newPt, primaryDx: e.target.value})} placeholder="Primary Diagnosis" className="border rounded-lg p-2 text-sm" />
+        <div className="flex gap-6">
+          {/* Patient List */}
+          <div className="w-80 flex-shrink-0">
+            <div className="bg-white rounded-2xl shadow-sm shadow-slate-200/50 border border-slate-100 overflow-hidden">
+              <div className="p-4 border-b border-slate-100">
+                <h2 className="font-semibold text-slate-700">Patients</h2>
+              </div>
+              <div className="divide-y divide-slate-50">
+                {patients.length === 0 ? (
+                  <div className="p-8 text-center">
+                    <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-3">
+                      <User className="w-6 h-6 text-slate-300" />
+                    </div>
+                    <p className="text-sm text-slate-400">No patients yet</p>
+                  </div>
+                ) : patients.map(pt => {
+                  const phase = getPhase(pt);
+                  const progress = getProgress(pt);
+                  const isSelected = selectedPt?.id === pt.id;
+                  return (
+                    <div
+                      key={pt.id}
+                      onClick={() => { setSelectedPt(pt); setActiveSection('info'); }}
+                      className={`p-4 cursor-pointer transition-all ${isSelected ? 'bg-slate-50' : 'hover:bg-slate-50/50'}`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-medium text-slate-700">{pt.caseId}</span>
+                        <ChevronRight className={`w-4 h-4 transition-transform ${isSelected ? 'text-slate-600 rotate-90' : 'text-slate-300'}`} />
+                      </div>
+                      <p className="text-sm text-slate-400 mb-3">{pt.primaryDx || 'No diagnosis'}</p>
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full rounded-full transition-all ${
+                              phase.color === 'amber' ? 'bg-amber-400' :
+                              phase.color === 'blue' ? 'bg-blue-400' :
+                              phase.color === 'violet' ? 'bg-violet-400' :
+                              phase.color === 'emerald' ? 'bg-emerald-400' : 'bg-slate-400'
+                            }`}
+                            style={{ width: `${progress}%` }}
+                          />
+                        </div>
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                          phase.color === 'amber' ? 'bg-amber-50 text-amber-600' :
+                          phase.color === 'blue' ? 'bg-blue-50 text-blue-600' :
+                          phase.color === 'violet' ? 'bg-violet-50 text-violet-600' :
+                          phase.color === 'emerald' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-600'
+                        }`}>{phase.label}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-            <button onClick={addPatient} disabled={!newPt.caseId} className="w-full bg-indigo-600 text-white py-2 rounded-lg text-sm font-medium disabled:opacity-50">Add Patient</button>
           </div>
-        )}
 
-        <div className="bg-white rounded-xl shadow-sm border">
-          {filtered.length === 0 ? <p className="text-center py-8 text-gray-500">No patients yet. Add your first patient above!</p> : filtered.map(pt => {
-            const phase = getPhase(pt);
-            const locked = pt.itp.finalized;
-            return (
-              <div key={pt.id} className="border-b last:border-b-0">
-                <div className="p-2 cursor-pointer hover:bg-gray-50" onClick={() => { setExpandedId(expandedId === pt.id ? null : pt.id); setPatientTab('info'); }}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2"><div className={`w-1.5 h-6 rounded-full ${phaseDots[phase]}`}></div><div><p className="font-semibold text-sm">{pt.caseId} {pt.firstName && `- ${pt.firstName} ${pt.lastName}`}</p><p className="text-xs text-gray-500">{pt.primaryDx}</p></div></div>
-                    <div className="flex items-center gap-2">{locked && <Lock className="w-3 h-3 text-green-600" />}<span className={`px-2 py-0.5 rounded-full text-xs font-medium ${phaseColors[phase]}`}>{phase}</span>{expandedId === pt.id ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}</div>
+          {/* Detail Panel */}
+          <div className="flex-1">
+            {!selectedPt ? (
+              <div className="bg-white rounded-2xl shadow-sm shadow-slate-200/50 border border-slate-100 p-12 text-center">
+                <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
+                  <FileText className="w-8 h-8 text-slate-300" />
+                </div>
+                <p className="text-slate-400">Select a patient to view details</p>
+              </div>
+            ) : (
+              <div className="bg-white rounded-2xl shadow-sm shadow-slate-200/50 border border-slate-100 overflow-hidden">
+                {/* Patient Header */}
+                <div className="p-6 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h2 className="text-2xl font-semibold text-slate-800">{selectedPt.caseId}</h2>
+                      <p className="text-slate-400 mt-1">{selectedPt.firstName} {selectedPt.lastName}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {selectedPt.itp.finalized && (
+                        <span className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-full text-sm font-medium">
+                          <Lock className="w-3.5 h-3.5" />
+                          Finalized
+                        </span>
+                      )}
+                      <button onClick={() => setShowPreview(selectedPt)} className="p-2 rounded-full hover:bg-slate-100 transition-colors">
+                        <Eye className="w-4 h-4 text-slate-400" />
+                      </button>
+                      <button onClick={() => deletePt(selectedPt.id)} className="p-2 rounded-full hover:bg-red-50 transition-colors">
+                        <X className="w-4 h-4 text-slate-400 hover:text-red-500" />
+                      </button>
+                    </div>
                   </div>
                 </div>
-                {expandedId === pt.id && (
-                  <div className="px-2 pb-2 bg-gray-50">
-                    <div className="flex justify-between items-center mb-2">
-                      <div className="flex gap-1">{['info','diagnostic','assessment','itp','treatment'].map(t => (<button key={t} onClick={e => { e.stopPropagation(); setPatientTab(t); }} className={`px-2 py-1 rounded text-xs font-medium capitalize ${patientTab === t ? 'bg-indigo-600 text-white' : 'bg-white border text-gray-600'}`}>{t === 'itp' ? 'ITP' : t}</button>))}</div>
-                      <button onClick={e => { e.stopPropagation(); deletePt(pt.id); }} className="text-xs text-red-500 hover:underline">Delete</button>
-                    </div>
-                    
-                    {patientTab === 'info' && (
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="bg-white p-2 rounded border"><p className="text-xs text-gray-500">Case ID</p><input type="text" value={pt.caseId} onChange={e => updatePt(pt.id, {caseId: e.target.value})} onClick={e => e.stopPropagation()} className="text-sm w-full font-medium focus:outline-none" /></div>
-                        <div className="bg-white p-2 rounded border"><p className="text-xs text-gray-500">Name</p><input type="text" value={`${pt.firstName} ${pt.lastName}`} onChange={e => { const [f,...l] = e.target.value.split(' '); updatePt(pt.id, {firstName: f || '', lastName: l.join(' ') || ''}); }} onClick={e => e.stopPropagation()} className="text-sm w-full font-medium focus:outline-none" /></div>
-                        <div className="bg-white p-2 rounded border"><p className="text-xs text-gray-500">DOB</p><input type="date" value={pt.dob} onChange={e => updatePt(pt.id, {dob: e.target.value})} onClick={e => e.stopPropagation()} className="text-sm w-full font-medium focus:outline-none" /></div>
-                        <div className="bg-white p-2 rounded border"><p className="text-xs text-gray-500">Diagnosis</p><input type="text" value={pt.primaryDx} onChange={e => updatePt(pt.id, {primaryDx: e.target.value})} onClick={e => e.stopPropagation()} className="text-sm w-full font-medium focus:outline-none" /></div>
-                      </div>
-                    )}
 
-                    {patientTab === 'diagnostic' && (
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center"><p className="text-xs font-semibold text-amber-700">DIAGNOSTIC PHASE</p><span className="text-xs">{getDiagProg(pt)}%</span></div>
-                        <div className="bg-white p-2 rounded border"><button onClick={e => { e.stopPropagation(); updatePt(pt.id, { parentIntakeComplete: !pt.parentIntakeComplete }); }} className="flex items-center gap-2">{pt.parentIntakeComplete ? <CheckCircle className="w-4 h-4 text-green-600" /> : <Circle className="w-4 h-4 text-gray-400" />}<span className="text-sm">Parent Intake</span></button></div>
-                        {Object.entries(diagAssess).map(([disc, items]) => (
-                          <div key={disc} className="bg-white p-2 rounded border"><p className="text-xs font-medium mb-1">{disc}</p><div className="flex flex-wrap gap-1">{items.map(a => { const done = pt.diagnosticAssessments[disc]?.includes(a); return (<button key={a} onClick={e => { e.stopPropagation(); toggleDiag(pt.id, disc, a); }} className={`px-2 py-0.5 rounded text-xs ${done ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>{done && '✓ '}{a}</button>); })}</div></div>
+                {/* Section Tabs */}
+                <div className="flex border-b border-slate-100">
+                  {[
+                    { id: 'info', label: 'Info', icon: User },
+                    { id: 'diagnostic', label: 'Diagnostic', icon: Activity },
+                    { id: 'assessment', label: 'Assessment', icon: FileText },
+                    { id: 'itp', label: 'ITP', icon: FileText },
+                    { id: 'treatment', label: 'Treatment', icon: Heart },
+                  ].map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveSection(tab.id)}
+                      className={`flex-1 py-4 text-sm font-medium transition-colors relative ${
+                        activeSection === tab.id ? 'text-slate-800' : 'text-slate-400 hover:text-slate-600'
+                      }`}
+                    >
+                      {tab.label}
+                      {activeSection === tab.id && (
+                        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-12 h-0.5 bg-slate-800 rounded-full" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Content */}
+                <div className="p-6">
+                  {activeSection === 'info' && (
+                    <div className="grid grid-cols-2 gap-4">
+                      {[
+                        { label: 'Case ID', value: selectedPt.caseId, key: 'caseId' },
+                        { label: 'Name', value: `${selectedPt.firstName} ${selectedPt.lastName}`, key: 'name' },
+                        { label: 'Date of Birth', value: selectedPt.dob, key: 'dob', type: 'date' },
+                        { label: 'Diagnosis', value: selectedPt.primaryDx, key: 'primaryDx' },
+                      ].map(field => (
+                        <div key={field.key} className="group">
+                          <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">{field.label}</label>
+                          <input
+                            type={field.type || 'text'}
+                            value={field.value}
+                            onChange={e => {
+                              if (field.key === 'name') {
+                                const [f, ...l] = e.target.value.split(' ');
+                                updatePt(selectedPt.id, { firstName: f || '', lastName: l.join(' ') || '' });
+                              } else {
+                                updatePt(selectedPt.id, { [field.key]: e.target.value });
+                              }
+                            }}
+                            className="w-full mt-1 p-3 bg-slate-50 border-0 rounded-xl text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-200 transition-all"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {activeSection === 'diagnostic' && (
+                    <div className="space-y-6">
+                      <div 
+                        onClick={() => updatePt(selectedPt.id, { parentIntakeComplete: !selectedPt.parentIntakeComplete })}
+                        className={`p-4 rounded-xl cursor-pointer transition-all ${selectedPt.parentIntakeComplete ? 'bg-emerald-50 border-2 border-emerald-200' : 'bg-slate-50 border-2 border-transparent hover:border-slate-200'}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-6 h-6 rounded-full flex items-center justify-center ${selectedPt.parentIntakeComplete ? 'bg-emerald-500' : 'bg-slate-200'}`}>
+                            {selectedPt.parentIntakeComplete && <Check className="w-4 h-4 text-white" strokeWidth={3} />}
+                          </div>
+                          <span className={`font-medium ${selectedPt.parentIntakeComplete ? 'text-emerald-700' : 'text-slate-600'}`}>Parent Intake Complete</span>
+                        </div>
+                      </div>
+                      {Object.entries(diagAssess).map(([disc, items]) => (
+                        <div key={disc}>
+                          <h4 className="text-sm font-semibold text-slate-700 mb-3">{disc}</h4>
+                          <div className="flex flex-wrap gap-2">
+                            {items.map(a => {
+                              const done = selectedPt.diagnosticAssessments[disc]?.includes(a);
+                              return (
+                                <button
+                                  key={a}
+                                  onClick={() => toggleDiag(selectedPt.id, disc, a)}
+                                  className={`px-3 py-2 rounded-xl text-sm font-medium transition-all ${
+                                    done 
+                                      ? 'bg-emerald-50 text-emerald-700 border-2 border-emerald-200' 
+                                      : 'bg-slate-50 text-slate-500 border-2 border-transparent hover:border-slate-200'
+                                  }`}
+                                >
+                                  {done && <Check className="w-3.5 h-3.5 inline mr-1.5" strokeWidth={3} />}
+                                  {a}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {activeSection === 'assessment' && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-slate-700 mb-3">Social Work Assessments</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {swAssess.map(a => {
+                          const done = selectedPt.socialWorkAssessments.includes(a);
+                          return (
+                            <button
+                              key={a}
+                              onClick={() => toggleSW(selectedPt.id, a)}
+                              className={`px-3 py-2 rounded-xl text-sm font-medium transition-all ${
+                                done 
+                                  ? 'bg-emerald-50 text-emerald-700 border-2 border-emerald-200' 
+                                  : 'bg-slate-50 text-slate-500 border-2 border-transparent hover:border-slate-200'
+                              }`}
+                            >
+                              {done && <Check className="w-3.5 h-3.5 inline mr-1.5" strokeWidth={3} />}
+                              {a}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {activeSection === 'itp' && (
+                    <div className="space-y-6">
+                      {/* Goals */}
+                      <div>
+                        <div className="flex items-center justify-between mb-4">
+                          <h4 className="text-sm font-semibold text-slate-700">Goals</h4>
+                          {!selectedPt.itp.finalized && (
+                            <button onClick={() => addGoal(selectedPt.id)} className="text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1">
+                              <Plus className="w-4 h-4" /> Add Goal
+                            </button>
+                          )}
+                        </div>
+                        {selectedPt.itp.goals.length === 0 ? (
+                          <div className="p-8 bg-slate-50 rounded-xl text-center">
+                            <p className="text-slate-400 text-sm">No goals added yet</p>
+                          </div>
+                        ) : selectedPt.itp.goals.map(g => (
+                          <div key={g.id} className="p-4 bg-slate-50 rounded-xl mb-3">
+                            <div className="flex gap-3 mb-3">
+                              <select
+                                value={g.discipline}
+                                onChange={e => updateGoal(selectedPt.id, g.id, 'discipline', e.target.value)}
+                                disabled={selectedPt.itp.finalized}
+                                className="px-3 py-2 bg-white rounded-lg text-sm border-0 focus:ring-2 focus:ring-slate-200"
+                              >
+                                <option value="">Discipline</option>
+                                {itpDisc.map(d => <option key={d} value={d}>{d}</option>)}
+                              </select>
+                              <input
+                                value={g.domain}
+                                onChange={e => updateGoal(selectedPt.id, g.id, 'domain', e.target.value)}
+                                disabled={selectedPt.itp.finalized}
+                                placeholder="Domain"
+                                className="flex-1 px-3 py-2 bg-white rounded-lg text-sm border-0 focus:ring-2 focus:ring-slate-200"
+                              />
+                              {!selectedPt.itp.finalized && (
+                                <button onClick={() => removeGoal(selectedPt.id, g.id)} className="p-2 text-slate-400 hover:text-red-500">
+                                  <X className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                            <textarea
+                              value={g.longTermGoal}
+                              onChange={e => updateGoal(selectedPt.id, g.id, 'longTermGoal', e.target.value)}
+                              disabled={selectedPt.itp.finalized}
+                              placeholder="Long Term Goal"
+                              className="w-full px-3 py-2 bg-white rounded-lg text-sm border-0 focus:ring-2 focus:ring-slate-200 resize-none h-20 mb-3"
+                            />
+                            <p className="text-xs font-medium text-slate-400 mb-2">Short Term Goals</p>
+                            {g.shortTermGoals.map((stg, idx) => (
+                              <div key={idx} className="flex gap-2 mb-2">
+                                <input value={stg.goal} onChange={e => updateSTG(selectedPt.id, g.id, idx, 'goal', e.target.value)} disabled={selectedPt.itp.finalized} placeholder="Goal" className="flex-1 px-3 py-2 bg-white rounded-lg text-sm border-0" />
+                                <input value={stg.measure} onChange={e => updateSTG(selectedPt.id, g.id, idx, 'measure', e.target.value)} disabled={selectedPt.itp.finalized} placeholder="Measure" className="w-24 px-3 py-2 bg-white rounded-lg text-sm border-0" />
+                                <input value={stg.criteria} onChange={e => updateSTG(selectedPt.id, g.id, idx, 'criteria', e.target.value)} disabled={selectedPt.itp.finalized} placeholder="Criteria" className="w-28 px-3 py-2 bg-white rounded-lg text-sm border-0" />
+                              </div>
+                            ))}
+                            {!selectedPt.itp.finalized && (
+                              <button onClick={() => addSTG(selectedPt.id, g.id)} className="text-xs text-slate-400 hover:text-slate-600 mt-1">+ Add Short Term Goal</button>
+                            )}
+                          </div>
                         ))}
                       </div>
-                    )}
 
-                    {patientTab === 'assessment' && (
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center"><p className="text-xs font-semibold text-blue-700">ASSESSMENT PHASE</p><span className="text-xs">{getSWProg(pt)}%</span></div>
-                        <div className="bg-white p-2 rounded border"><div className="flex flex-wrap gap-1">{swAssess.map(a => { const done = pt.socialWorkAssessments.includes(a); return (<button key={a} onClick={e => { e.stopPropagation(); toggleSW(pt.id, a); }} className={`px-2 py-0.5 rounded text-xs ${done ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>{done && '✓ '}{a}</button>); })}</div></div>
-                      </div>
-                    )}
-
-                    {patientTab === 'itp' && (
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center">
-                          <div className="flex items-center gap-2"><p className="text-xs font-semibold text-purple-700">ITP</p>{locked && <span className="flex items-center gap-1 text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded"><Lock className="w-3 h-3" />Finalized</span>}</div>
-                          <div className="flex gap-1">
-                            <button onClick={e => { e.stopPropagation(); setShowPreview(pt); }} className="flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs"><Eye className="w-3 h-3" />Preview</button>
-                            {locked ? <button onClick={e => { e.stopPropagation(); setShowEditReq(pt.id); }} className="flex items-center gap-1 px-2 py-1 bg-amber-100 text-amber-700 rounded text-xs"><AlertCircle className="w-3 h-3" />Request Edit</button> : allSigned(pt) && <button onClick={e => { e.stopPropagation(); setShowFinalize(pt.id); }} className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white rounded text-xs"><Lock className="w-3 h-3" />Finalize</button>}
-                          </div>
-                        </div>
-                        <div className="text-xs text-gray-500">Sign-offs: {getITPProg(pt)}%</div>
-                        {pt.itp.editRequests.length > 0 && <div className="bg-amber-50 p-2 rounded border border-amber-200">{pt.itp.editRequests.map((r, i) => <div key={i} className="text-xs flex justify-between"><span>{r.date}: {r.reason}</span><button onClick={e => { e.stopPropagation(); unlock(pt.id); }} className="text-indigo-600 underline">Unlock</button></div>)}</div>}
-                        <div className="bg-white p-2 rounded border">
-                          <div className="flex justify-between items-center mb-2"><p className="text-xs font-semibold">Goals</p>{!locked && <button onClick={e => { e.stopPropagation(); addGoal(pt.id); }} className="flex items-center gap-1 px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs"><Plus className="w-3 h-3" />Add</button>}</div>
-                          {pt.itp.goals.map(g => (
-                            <div key={g.id} className="border rounded p-2 mb-2 bg-gray-50">
-                              <div className="flex gap-2 mb-2">
-                                <select value={g.discipline} onChange={e => updateGoal(pt.id, g.id, 'discipline', e.target.value)} onClick={e => e.stopPropagation()} disabled={locked} className="text-xs border rounded p-1 disabled:bg-gray-100"><option value="">Discipline</option>{itpDisc.map(d => <option key={d} value={d}>{d}</option>)}</select>
-                                <input type="text" value={g.domain} onChange={e => updateGoal(pt.id, g.id, 'domain', e.target.value)} onClick={e => e.stopPropagation()} disabled={locked} placeholder="Domain" className="flex-1 text-xs border rounded p-1 disabled:bg-gray-100" />
-                                {!locked && <button onClick={e => { e.stopPropagation(); removeGoal(pt.id, g.id); }} className="text-red-500"><Trash2 className="w-3 h-3" /></button>}
-                              </div>
-                              <textarea value={g.longTermGoal} onChange={e => updateGoal(pt.id, g.id, 'longTermGoal', e.target.value)} onClick={e => e.stopPropagation()} disabled={locked} placeholder="Long Term Goal" className="w-full text-xs border rounded p-1 mb-2 h-10 disabled:bg-gray-100" />
-                              <p className="text-xs text-gray-500 mb-1">Short Term Goals:</p>
-                              {g.shortTermGoals.map((stg, idx) => (
-                                <div key={idx} className="flex gap-1 mb-1">
-                                  <input type="text" value={stg.goal} onChange={e => updateSTG(pt.id, g.id, idx, 'goal', e.target.value)} onClick={e => e.stopPropagation()} disabled={locked} placeholder="Goal" className="flex-1 text-xs border rounded p-1 disabled:bg-gray-100" />
-                                  <input type="text" value={stg.measure} onChange={e => updateSTG(pt.id, g.id, idx, 'measure', e.target.value)} onClick={e => e.stopPropagation()} disabled={locked} placeholder="Measure" className="w-20 text-xs border rounded p-1 disabled:bg-gray-100" />
-                                  <input type="text" value={stg.criteria} onChange={e => updateSTG(pt.id, g.id, idx, 'criteria', e.target.value)} onClick={e => e.stopPropagation()} disabled={locked} placeholder="Criteria" className="w-24 text-xs border rounded p-1 disabled:bg-gray-100" />
-                                  {!locked && <button onClick={e => { e.stopPropagation(); removeSTG(pt.id, g.id, idx); }} className="text-red-400"><X className="w-3 h-3" /></button>}
+                      {/* Sign-offs */}
+                      <div>
+                        <h4 className="text-sm font-semibold text-slate-700 mb-4">Sign-offs</h4>
+                        <div className="grid grid-cols-4 gap-3">
+                          {[
+                            { k: 'parent', l: 'Parent' },
+                            { k: 'socialWorker', l: 'Social Worker' },
+                            { k: 'psychiatry', l: 'Psychiatry' },
+                            { k: 'psychology', l: 'Psychology' },
+                            { k: 'aba', l: 'ABA' },
+                            { k: 'slp', l: 'SLP' },
+                            { k: 'ot', l: 'OT' },
+                          ].map(r => {
+                            const signed = selectedPt.itp.signoffs[r.k].signed;
+                            return (
+                              <button
+                                key={r.k}
+                                onClick={() => toggleSign(selectedPt.id, r.k)}
+                                disabled={selectedPt.itp.finalized}
+                                className={`p-3 rounded-xl text-left transition-all ${
+                                  signed 
+                                    ? 'bg-emerald-50 border-2 border-emerald-200' 
+                                    : 'bg-slate-50 border-2 border-transparent hover:border-slate-200'
+                                } ${selectedPt.itp.finalized ? 'opacity-60 cursor-not-allowed' : ''}`}
+                              >
+                                <div className="flex items-center gap-2 mb-1">
+                                  <div className={`w-5 h-5 rounded-full flex items-center justify-center ${signed ? 'bg-emerald-500' : 'bg-slate-200'}`}>
+                                    {signed && <Check className="w-3 h-3 text-white" strokeWidth={3} />}
+                                  </div>
+                                  <span className={`text-sm font-medium ${signed ? 'text-emerald-700' : 'text-slate-600'}`}>{r.l}</span>
                                 </div>
-                              ))}
-                              {!locked && <button onClick={e => { e.stopPropagation(); addSTG(pt.id, g.id); }} className="text-xs text-purple-600">+ Add STG</button>}
-                            </div>
-                          ))}
-                          {pt.itp.goals.length === 0 && <p className="text-xs text-gray-400 text-center py-2">No goals yet</p>}
-                        </div>
-                        <div className="bg-white p-2 rounded border">
-                          <p className="text-xs font-semibold mb-2">Sign-offs</p>
-                          <div className="grid grid-cols-4 gap-2">
-                            {[{k:'parent',l:'Parent'},{k:'socialWorker',l:'SW'},{k:'psychiatry',l:'Psych'},{k:'psychology',l:'Psychol'},{k:'aba',l:'ABA'},{k:'slp',l:'SLP'},{k:'ot',l:'OT'}].map(r => (
-                              <button key={r.k} onClick={e => { e.stopPropagation(); toggleSign(pt.id, r.k); }} disabled={locked} className={`p-2 rounded border text-xs text-left ${pt.itp.signoffs[r.k].signed ? 'bg-green-50 border-green-300' : 'bg-gray-50'} disabled:opacity-75`}>
-                                <div className="flex items-center gap-1">{pt.itp.signoffs[r.k].signed ? <CheckCircle className="w-3 h-3 text-green-600" /> : <Circle className="w-3 h-3 text-gray-400" />}<span className="font-medium">{r.l}</span></div>
+                                {signed && <p className="text-xs text-slate-400 ml-7">{selectedPt.itp.signoffs[r.k].date}</p>}
                               </button>
-                            ))}
-                          </div>
+                            );
+                          })}
                         </div>
                       </div>
-                    )}
 
-                    {patientTab === 'treatment' && (
-                      <div className="bg-white p-3 rounded border">
-                        <p className="text-xs font-semibold text-green-700 mb-2">TREATMENT</p>
-                        {pt.treatmentStartDate ? <p className="text-sm text-green-700">Started: {pt.treatmentStartDate}</p> : getPhase(pt) === "Ready for Treatment" ? <button onClick={e => { e.stopPropagation(); updatePt(pt.id, { treatmentStartDate: new Date().toISOString().split('T')[0] }); }} className="px-3 py-1.5 bg-green-600 text-white rounded text-sm font-medium">Start Treatment</button> : <p className="text-xs text-gray-500">Complete ITP first</p>}
-                      </div>
-                    )}
-                  </div>
-                )}
+                      {/* Finalize Button */}
+                      {!selectedPt.itp.finalized && allSigned(selectedPt) && (
+                        <button
+                          onClick={() => finalize(selectedPt.id)}
+                          className="w-full py-3 bg-emerald-500 text-white font-medium rounded-xl hover:bg-emerald-600 transition-colors flex items-center justify-center gap-2"
+                        >
+                          <Lock className="w-4 h-4" />
+                          Finalize ITP
+                        </button>
+                      )}
+                      {selectedPt.itp.finalized && (
+                        <button
+                          onClick={() => unlock(selectedPt.id)}
+                          className="w-full py-3 bg-slate-100 text-slate-600 font-medium rounded-xl hover:bg-slate-200 transition-colors flex items-center justify-center gap-2"
+                        >
+                          <AlertCircle className="w-4 h-4" />
+                          Request Edit
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {activeSection === 'treatment' && (
+                    <div>
+                      {selectedPt.treatmentStartDate ? (
+                        <div className="p-6 bg-emerald-50 rounded-xl text-center">
+                          <div className="w-12 h-12 rounded-full bg-emerald-500 flex items-center justify-center mx-auto mb-3">
+                            <Heart className="w-6 h-6 text-white" />
+                          </div>
+                          <p className="text-emerald-700 font-medium">Treatment Started</p>
+                          <p className="text-emerald-600 text-sm mt-1">{selectedPt.treatmentStartDate}</p>
+                        </div>
+                      ) : getPhase(selectedPt).label === "Ready" ? (
+                        <button
+                          onClick={() => updatePt(selectedPt.id, { treatmentStartDate: new Date().toISOString().split('T')[0] })}
+                          className="w-full py-4 bg-emerald-500 text-white font-medium rounded-xl hover:bg-emerald-600 transition-colors"
+                        >
+                          Start Treatment
+                        </button>
+                      ) : (
+                        <div className="p-6 bg-slate-50 rounded-xl text-center">
+                          <p className="text-slate-400">Complete ITP and get all sign-offs first</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
-            );
-          })}
+            )}
+          </div>
         </div>
-
-        {showFinalize && <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"><div className="bg-white rounded-lg p-4 max-w-sm"><h3 className="font-bold mb-2">Finalize ITP?</h3><p className="text-sm text-gray-600 mb-4">The ITP will be locked.</p><div className="flex gap-2 justify-end"><button onClick={() => setShowFinalize(null)} className="px-3 py-1.5 border rounded text-sm">Cancel</button><button onClick={() => finalize(showFinalize)} className="px-3 py-1.5 bg-green-600 text-white rounded text-sm">Finalize</button></div></div></div>}
-        {showEditReq && <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"><div className="bg-white rounded-lg p-4 max-w-sm"><h3 className="font-bold mb-2">Request Edit</h3><textarea value={editReason} onChange={e => setEditReason(e.target.value)} placeholder="Reason..." className="w-full border rounded p-2 text-sm h-20 mb-4" /><div className="flex gap-2 justify-end"><button onClick={() => { setShowEditReq(null); setEditReason(''); }} className="px-3 py-1.5 border rounded text-sm">Cancel</button><button onClick={() => reqEdit(showEditReq, editReason)} disabled={!editReason} className="px-3 py-1.5 bg-amber-600 text-white rounded text-sm disabled:opacity-50">Submit</button></div></div></div>}
-        {showPreview && <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"><div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-auto"><div className="sticky top-0 bg-white border-b p-3 flex justify-between"><h2 className="font-bold">ITP Preview - {showPreview.caseId}</h2><button onClick={() => setShowPreview(null)}><X className="w-5 h-5" /></button></div><div className="p-6"><h1 className="text-lg font-bold text-center text-teal-700 mb-4">alkalma - Individualized Treatment Plan</h1><div className="border p-3 mb-4"><p><strong>Case ID:</strong> {showPreview.caseId}</p><p><strong>DOB:</strong> {showPreview.dob}</p><p><strong>Diagnosis:</strong> {showPreview.primaryDx}</p></div><h3 className="font-bold mb-2 bg-gray-100 p-2">Goals</h3>{showPreview.itp.goals.length === 0 ? <p className="text-gray-500 text-sm">No goals added yet.</p> : showPreview.itp.goals.map(g => <div key={g.id} className="border mb-3 p-3"><p className="font-semibold text-sm">{g.discipline} - {g.domain}</p><p className="text-sm mt-1"><strong>LTG:</strong> {g.longTermGoal}</p>{g.shortTermGoals.map((s,i) => <p key={i} className="text-xs mt-1 ml-4">• {s.goal} ({s.measure}: {s.criteria})</p>)}</div>)}<h3 className="font-bold mt-4 mb-2 bg-gray-100 p-2">Signatures</h3><div className="grid grid-cols-2 gap-2 text-sm">{Object.entries(showPreview.itp.signoffs).map(([k,v]) => <div key={k} className="flex justify-between border p-2"><span className="capitalize">{k}</span><span>{v.signed ? `✓ ${v.date}` : '—'}</span></div>)}</div>{showPreview.itp.finalized && <div className="mt-4 p-3 bg-green-100 border border-green-500 rounded text-center"><p className="font-bold text-green-800">✓ FINALIZED {showPreview.itp.finalizedDate}</p></div>}</div></div></div>}
       </div>
+
+      {/* Add Patient Modal */}
+      {showAdd && (
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="p-6 border-b border-slate-100">
+              <h3 className="text-lg font-semibold text-slate-800">New Patient</h3>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">Case ID *</label>
+                <input
+                  type="text"
+                  value={newPt.caseId}
+                  onChange={e => setNewPt({ ...newPt, caseId: e.target.value })}
+                  placeholder="e.g. BM-001"
+                  className="w-full mt-1 p-3 bg-slate-50 border-0 rounded-xl text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">First Name</label>
+                  <input
+                    type="text"
+                    value={newPt.firstName}
+                    onChange={e => setNewPt({ ...newPt, firstName: e.target.value })}
+                    className="w-full mt-1 p-3 bg-slate-50 border-0 rounded-xl text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">Last Name</label>
+                  <input
+                    type="text"
+                    value={newPt.lastName}
+                    onChange={e => setNewPt({ ...newPt, lastName: e.target.value })}
+                    className="w-full mt-1 p-3 bg-slate-50 border-0 rounded-xl text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">Diagnosis</label>
+                <input
+                  type="text"
+                  value={newPt.primaryDx}
+                  onChange={e => setNewPt({ ...newPt, primaryDx: e.target.value })}
+                  placeholder="e.g. ASD Level 2"
+                  className="w-full mt-1 p-3 bg-slate-50 border-0 rounded-xl text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                />
+              </div>
+            </div>
+            <div className="p-6 bg-slate-50 flex gap-3">
+              <button onClick={() => setShowAdd(false)} className="flex-1 py-3 bg-white text-slate-600 font-medium rounded-xl hover:bg-slate-100 transition-colors">
+                Cancel
+              </button>
+              <button onClick={addPatient} disabled={!newPt.caseId} className="flex-1 py-3 bg-slate-900 text-white font-medium rounded-xl hover:bg-slate-800 transition-colors disabled:opacity-50">
+                Add Patient
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Preview Modal */}
+      {showPreview && (
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-auto">
+            <div className="sticky top-0 bg-white p-6 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-slate-800">ITP Preview</h3>
+              <button onClick={() => setShowPreview(null)} className="p-2 rounded-full hover:bg-slate-100">
+                <X className="w-5 h-5 text-slate-400" />
+              </button>
+            </div>
+            <div className="p-6">
+              <div className="text-center mb-8">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center mx-auto mb-3">
+                  <Heart className="w-6 h-6 text-white" />
+                </div>
+                <h2 className="text-xl font-semibold text-slate-800">Individualized Treatment Plan</h2>
+                <p className="text-slate-400 mt-1">{showPreview.caseId}</p>
+              </div>
+              
+              <div className="bg-slate-50 rounded-xl p-4 mb-6">
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div><span className="text-slate-400">Case ID:</span> <span className="text-slate-700 font-medium">{showPreview.caseId}</span></div>
+                  <div><span className="text-slate-400">DOB:</span> <span className="text-slate-700 font-medium">{showPreview.dob || '—'}</span></div>
+                  <div className="col-span-2"><span className="text-slate-400">Diagnosis:</span> <span className="text-slate-700 font-medium">{showPreview.primaryDx || '—'}</span></div>
+                </div>
+              </div>
+
+              <h4 className="font-semibold text-slate-700 mb-3">Goals</h4>
+              {showPreview.itp.goals.length === 0 ? (
+                <p className="text-slate-400 text-sm mb-6">No goals added yet.</p>
+              ) : showPreview.itp.goals.map(g => (
+                <div key={g.id} className="bg-slate-50 rounded-xl p-4 mb-3">
+                  <p className="font-medium text-slate-700">{g.discipline} — {g.domain}</p>
+                  <p className="text-sm text-slate-500 mt-2">{g.longTermGoal}</p>
+                  {g.shortTermGoals.map((s, i) => (
+                    <p key={i} className="text-sm text-slate-400 mt-1 ml-4">• {s.goal}</p>
+                  ))}
+                </div>
+              ))}
+
+              <h4 className="font-semibold text-slate-700 mb-3 mt-6">Signatures</h4>
+              <div className="grid grid-cols-2 gap-2">
+                {Object.entries(showPreview.itp.signoffs).map(([k, v]) => (
+                  <div key={k} className="flex items-center justify-between bg-slate-50 rounded-lg p-3">
+                    <span className="text-sm text-slate-600 capitalize">{k}</span>
+                    <span className={`text-sm ${v.signed ? 'text-emerald-600' : 'text-slate-300'}`}>
+                      {v.signed ? `✓ ${v.date}` : '—'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {showPreview.itp.finalized && (
+                <div className="mt-6 p-4 bg-emerald-50 rounded-xl text-center">
+                  <p className="text-emerald-700 font-medium flex items-center justify-center gap-2">
+                    <Lock className="w-4 h-4" />
+                    Finalized on {showPreview.itp.finalizedDate}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
