@@ -1,14 +1,85 @@
 import { useState, useEffect } from 'react';
-import { ChevronDown, ChevronUp, UserPlus, X, CheckCircle, Circle, Plus, Trash2, Lock, Eye, AlertCircle, Save, Loader } from 'lucide-react';
+import { ChevronDown, ChevronUp, UserPlus, X, CheckCircle, Circle, Plus, Trash2, Lock, Eye, AlertCircle, Save, Loader, RefreshCw } from 'lucide-react';
+
+const SUPABASE_URL = 'https://igkwugfefllkutthnjwi.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlna3d1Z2ZlZmxsa3V0dGhuandpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgxNTUxMTIsImV4cCI6MjA4MzczMTExMn0.w9vE39YSYiwGRl9saT9pUpde57XMTTyUjDw-v2sc12o';
+
+const supabase = {
+  from: (table) => ({
+    select: async () => {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=*`, {
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+      });
+      const data = await res.json();
+      return { data, error: res.ok ? null : data };
+    },
+    insert: async (rows) => {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+        method: 'POST',
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
+        body: JSON.stringify(rows)
+      });
+      const data = await res.json();
+      return { data, error: res.ok ? null : data };
+    },
+    update: (row) => ({
+      eq: async (col, val) => {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${col}=eq.${val}`, {
+          method: 'PATCH',
+          headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
+          body: JSON.stringify(row)
+        });
+        const data = await res.json();
+        return { data, error: res.ok ? null : data };
+      }
+    }),
+    delete: () => ({
+      eq: async (col, val) => {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${col}=eq.${val}`, {
+          method: 'DELETE',
+          headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+        });
+        return { error: res.ok ? null : 'Delete failed' };
+      }
+    })
+  })
+};
 
 const diagAssess = { ABA: ['FBA', 'ADOS-2', 'VB-MAPP', 'ABLLS-R', 'AFLS', 'Paired Choice', 'Vineland-3'], Psychiatry: ['DSM-5 Criteria', 'ADOS-2', 'Medical Review', 'Mental Status Exam'], Psychology: ['ADOS-2', 'ADI-R', 'WISC-V/WPPSI-IV', 'CBCL', 'ABAS-3'], SLP: ['CELF-5', 'PLS-5', 'PPVT-4', 'EVT-3', 'GFTA-3'], OT: ['Sensory Profile', 'PM-2', 'BOT-2', 'PDMS-2', 'GAS Baseline'] };
 const swAssess = ['SES Assessment', 'Eco-Map', 'Genogram', 'Family Needs', 'CANS'];
 const itpDisc = ['Psychiatry', 'Psychology', 'ABA', 'SLP', 'OT', 'Social Work'];
 const emptyITP = () => ({ goals: [], signoffs: { parent: { signed: false, date: '' }, socialWorker: { signed: false, date: '' }, psychiatry: { signed: false, date: '' }, psychology: { signed: false, date: '' }, aba: { signed: false, date: '' }, slp: { signed: false, date: '' }, ot: { signed: false, date: '' } }, finalized: false, finalizedDate: '', editRequests: [] });
 
-const samplePatients = [
-  { id: 1, caseId: "BM-001", firstName: "Sample", lastName: "Patient", dob: "2020-03-15", parentName: "Parent Name", insurance: "Insurance", primaryDx: "ASD Level 2", parentIntakeComplete: false, diagnosticAssessments: { ABA: [], Psychiatry: [], Psychology: [], SLP: [], OT: [] }, socialWorkAssessments: [], itp: emptyITP(), treatmentStartDate: null }
-];
+const toDb = (p) => ({
+  case_id: p.caseId,
+  first_name: p.firstName,
+  last_name: p.lastName,
+  dob: p.dob || null,
+  parent_name: p.parentName,
+  insurance: p.insurance,
+  primary_dx: p.primaryDx,
+  parent_intake_complete: p.parentIntakeComplete,
+  diagnostic_assessments: p.diagnosticAssessments,
+  social_work_assessments: p.socialWorkAssessments,
+  itp: p.itp,
+  treatment_start_date: p.treatmentStartDate || null
+});
+
+const fromDb = (r) => ({
+  id: r.id,
+  caseId: r.case_id,
+  firstName: r.first_name || '',
+  lastName: r.last_name || '',
+  dob: r.dob || '',
+  parentName: r.parent_name || '',
+  insurance: r.insurance || '',
+  primaryDx: r.primary_dx || '',
+  parentIntakeComplete: r.parent_intake_complete || false,
+  diagnosticAssessments: r.diagnostic_assessments || { ABA: [], Psychiatry: [], Psychology: [], SLP: [], OT: [] },
+  socialWorkAssessments: r.social_work_assessments || [],
+  itp: r.itp || emptyITP(),
+  treatmentStartDate: r.treatment_start_date || null
+});
 
 export default function Dashboard() {
   const [patients, setPatients] = useState([]);
@@ -25,27 +96,21 @@ export default function Dashboard() {
   const [showAdd, setShowAdd] = useState(false);
   const [newPt, setNewPt] = useState({ caseId: '', firstName: '', lastName: '', dob: '', parentName: '', insurance: '', primaryDx: '' });
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('brightminds-patients');
-      if (saved) {
-        try { setPatients(JSON.parse(saved)); } 
-        catch (e) { setPatients(samplePatients); }
-      } else {
-        setPatients(samplePatients);
-      }
-    }
+  const loadPatients = async () => {
+    setLoading(true);
+    const { data, error } = await supabase.from('patients').select();
+    if (!error && data) setPatients(data.map(fromDb));
     setLoading(false);
-  }, []);
+  };
 
-  useEffect(() => {
-    if (!loading && patients.length > 0 && typeof window !== 'undefined') {
-      setSaving(true);
-      localStorage.setItem('brightminds-patients', JSON.stringify(patients));
-      setLastSaved(new Date().toLocaleTimeString());
-      setSaving(false);
-    }
-  }, [patients, loading]);
+  useEffect(() => { loadPatients(); }, []);
+
+  const savePatient = async (pt) => {
+    setSaving(true);
+    await supabase.from('patients').update(toDb(pt)).eq('id', pt.id);
+    setLastSaved(new Date().toLocaleTimeString());
+    setSaving(false);
+  };
 
   const getPhase = (p) => {
     if (p.treatmentStartDate) return "Treatment";
@@ -67,22 +132,119 @@ export default function Dashboard() {
   const stats = { total: patients.length, diagnostic: patients.filter(p => getPhase(p) === "Diagnostic").length, assessment: patients.filter(p => getPhase(p) === "Assessment").length, itp: patients.filter(p => getPhase(p) === "ITP Development").length, treatment: patients.filter(p => getPhase(p) === "Treatment").length };
   const filtered = phaseFilter === "All" ? patients : patients.filter(p => getPhase(p) === phaseFilter);
 
-  const updatePt = (id, u) => setPatients(patients.map(p => p.id === id ? { ...p, ...u } : p));
-  const toggleDiag = (id, disc, a) => setPatients(patients.map(p => p.id === id ? { ...p, diagnosticAssessments: { ...p.diagnosticAssessments, [disc]: p.diagnosticAssessments[disc].includes(a) ? p.diagnosticAssessments[disc].filter(x => x !== a) : [...p.diagnosticAssessments[disc], a] } } : p));
-  const toggleSW = (id, a) => setPatients(patients.map(p => p.id === id ? { ...p, socialWorkAssessments: p.socialWorkAssessments.includes(a) ? p.socialWorkAssessments.filter(x => x !== a) : [...p.socialWorkAssessments, a] } : p));
-  const toggleSign = (id, role) => { const pt = patients.find(p => p.id === id); if (pt.itp.finalized) return; setPatients(patients.map(p => p.id === id ? { ...p, itp: { ...p.itp, signoffs: { ...p.itp.signoffs, [role]: { signed: !p.itp.signoffs[role].signed, date: !p.itp.signoffs[role].signed ? new Date().toISOString().split('T')[0] : '' } } } } : p)); };
-  const finalize = (id) => { setPatients(patients.map(p => p.id === id ? { ...p, itp: { ...p.itp, finalized: true, finalizedDate: new Date().toISOString().split('T')[0] } } : p)); setShowFinalize(null); };
-  const reqEdit = (id, reason) => { setPatients(patients.map(p => p.id === id ? { ...p, itp: { ...p.itp, editRequests: [...p.itp.editRequests, { date: new Date().toISOString().split('T')[0], reason }] } } : p)); setShowEditReq(null); setEditReason(''); };
-  const unlock = (id) => setPatients(patients.map(p => p.id === id ? { ...p, itp: { ...p.itp, finalized: false, finalizedDate: '' } } : p));
-  const addGoal = (id) => { const pt = patients.find(p => p.id === id); if (pt.itp.finalized) return; setPatients(patients.map(p => p.id === id ? { ...p, itp: { ...p.itp, goals: [...p.itp.goals, { id: Date.now(), discipline: '', domain: '', longTermGoal: '', shortTermGoals: [{ goal: '', measure: '', criteria: '' }] }] } } : p)); };
-  const updateGoal = (pId, gId, f, v) => { const pt = patients.find(p => p.id === pId); if (pt.itp.finalized) return; setPatients(patients.map(p => p.id === pId ? { ...p, itp: { ...p.itp, goals: p.itp.goals.map(g => g.id === gId ? { ...g, [f]: v } : g) } } : p)); };
-  const removeGoal = (pId, gId) => { const pt = patients.find(p => p.id === pId); if (pt.itp.finalized) return; setPatients(patients.map(p => p.id === pId ? { ...p, itp: { ...p.itp, goals: p.itp.goals.filter(g => g.id !== gId) } } : p)); };
-  const addSTG = (pId, gId) => { const pt = patients.find(p => p.id === pId); if (pt.itp.finalized) return; setPatients(patients.map(p => p.id === pId ? { ...p, itp: { ...p.itp, goals: p.itp.goals.map(g => g.id === gId ? { ...g, shortTermGoals: [...g.shortTermGoals, { goal: '', measure: '', criteria: '' }] } : g) } } : p)); };
-  const updateSTG = (pId, gId, idx, f, v) => { const pt = patients.find(p => p.id === pId); if (pt.itp.finalized) return; setPatients(patients.map(p => p.id === pId ? { ...p, itp: { ...p.itp, goals: p.itp.goals.map(g => g.id === gId ? { ...g, shortTermGoals: g.shortTermGoals.map((s, i) => i === idx ? { ...s, [f]: v } : s) } : g) } } : p)); };
-  const removeSTG = (pId, gId, idx) => { const pt = patients.find(p => p.id === pId); if (pt.itp.finalized) return; setPatients(patients.map(p => p.id === pId ? { ...p, itp: { ...p.itp, goals: p.itp.goals.map(g => g.id === gId ? { ...g, shortTermGoals: g.shortTermGoals.filter((_, i) => i !== idx) } : g) } } : p)); };
-  const deletePt = (id) => { if (confirm('Delete this patient?')) setPatients(patients.filter(p => p.id !== id)); };
-  const addPatient = () => { if (!newPt.caseId) return; setPatients([...patients, { id: Date.now(), ...newPt, parentIntakeComplete: false, diagnosticAssessments: { ABA: [], Psychiatry: [], Psychology: [], SLP: [], OT: [] }, socialWorkAssessments: [], itp: emptyITP(), treatmentStartDate: null }]); setNewPt({ caseId: '', firstName: '', lastName: '', dob: '', parentName: '', insurance: '', primaryDx: '' }); setShowAdd(false); };
-  const resetData = () => { if (confirm('Reset all data? This cannot be undone.')) { localStorage.removeItem('brightminds-patients'); setPatients(samplePatients); } };
+  const updatePt = async (id, u) => {
+    const updated = patients.map(p => p.id === id ? { ...p, ...u } : p);
+    setPatients(updated);
+    const pt = updated.find(p => p.id === id);
+    await savePatient(pt);
+  };
+
+  const toggleDiag = async (id, disc, a) => {
+    const updated = patients.map(p => p.id === id ? { ...p, diagnosticAssessments: { ...p.diagnosticAssessments, [disc]: p.diagnosticAssessments[disc].includes(a) ? p.diagnosticAssessments[disc].filter(x => x !== a) : [...p.diagnosticAssessments[disc], a] } } : p);
+    setPatients(updated);
+    await savePatient(updated.find(p => p.id === id));
+  };
+
+  const toggleSW = async (id, a) => {
+    const updated = patients.map(p => p.id === id ? { ...p, socialWorkAssessments: p.socialWorkAssessments.includes(a) ? p.socialWorkAssessments.filter(x => x !== a) : [...p.socialWorkAssessments, a] } : p);
+    setPatients(updated);
+    await savePatient(updated.find(p => p.id === id));
+  };
+
+  const toggleSign = async (id, role) => {
+    const pt = patients.find(p => p.id === id);
+    if (pt.itp.finalized) return;
+    const updated = patients.map(p => p.id === id ? { ...p, itp: { ...p.itp, signoffs: { ...p.itp.signoffs, [role]: { signed: !p.itp.signoffs[role].signed, date: !p.itp.signoffs[role].signed ? new Date().toISOString().split('T')[0] : '' } } } } : p);
+    setPatients(updated);
+    await savePatient(updated.find(p => p.id === id));
+  };
+
+  const finalize = async (id) => {
+    const updated = patients.map(p => p.id === id ? { ...p, itp: { ...p.itp, finalized: true, finalizedDate: new Date().toISOString().split('T')[0] } } : p);
+    setPatients(updated);
+    await savePatient(updated.find(p => p.id === id));
+    setShowFinalize(null);
+  };
+
+  const reqEdit = async (id, reason) => {
+    const updated = patients.map(p => p.id === id ? { ...p, itp: { ...p.itp, editRequests: [...p.itp.editRequests, { date: new Date().toISOString().split('T')[0], reason }] } } : p);
+    setPatients(updated);
+    await savePatient(updated.find(p => p.id === id));
+    setShowEditReq(null);
+    setEditReason('');
+  };
+
+  const unlock = async (id) => {
+    const updated = patients.map(p => p.id === id ? { ...p, itp: { ...p.itp, finalized: false, finalizedDate: '' } } : p);
+    setPatients(updated);
+    await savePatient(updated.find(p => p.id === id));
+  };
+
+  const addGoal = async (id) => {
+    const pt = patients.find(p => p.id === id);
+    if (pt.itp.finalized) return;
+    const updated = patients.map(p => p.id === id ? { ...p, itp: { ...p.itp, goals: [...p.itp.goals, { id: Date.now(), discipline: '', domain: '', longTermGoal: '', shortTermGoals: [{ goal: '', measure: '', criteria: '' }] }] } } : p);
+    setPatients(updated);
+    await savePatient(updated.find(p => p.id === id));
+  };
+
+  const updateGoal = async (pId, gId, f, v) => {
+    const pt = patients.find(p => p.id === pId);
+    if (pt.itp.finalized) return;
+    const updated = patients.map(p => p.id === pId ? { ...p, itp: { ...p.itp, goals: p.itp.goals.map(g => g.id === gId ? { ...g, [f]: v } : g) } } : p);
+    setPatients(updated);
+    await savePatient(updated.find(p => p.id === pId));
+  };
+
+  const removeGoal = async (pId, gId) => {
+    const pt = patients.find(p => p.id === pId);
+    if (pt.itp.finalized) return;
+    const updated = patients.map(p => p.id === pId ? { ...p, itp: { ...p.itp, goals: p.itp.goals.filter(g => g.id !== gId) } } : p);
+    setPatients(updated);
+    await savePatient(updated.find(p => p.id === pId));
+  };
+
+  const addSTG = async (pId, gId) => {
+    const pt = patients.find(p => p.id === pId);
+    if (pt.itp.finalized) return;
+    const updated = patients.map(p => p.id === pId ? { ...p, itp: { ...p.itp, goals: p.itp.goals.map(g => g.id === gId ? { ...g, shortTermGoals: [...g.shortTermGoals, { goal: '', measure: '', criteria: '' }] } : g) } } : p);
+    setPatients(updated);
+    await savePatient(updated.find(p => p.id === pId));
+  };
+
+  const updateSTG = async (pId, gId, idx, f, v) => {
+    const pt = patients.find(p => p.id === pId);
+    if (pt.itp.finalized) return;
+    const updated = patients.map(p => p.id === pId ? { ...p, itp: { ...p.itp, goals: p.itp.goals.map(g => g.id === gId ? { ...g, shortTermGoals: g.shortTermGoals.map((s, i) => i === idx ? { ...s, [f]: v } : s) } : g) } } : p);
+    setPatients(updated);
+    await savePatient(updated.find(p => p.id === pId));
+  };
+
+  const removeSTG = async (pId, gId, idx) => {
+    const pt = patients.find(p => p.id === pId);
+    if (pt.itp.finalized) return;
+    const updated = patients.map(p => p.id === pId ? { ...p, itp: { ...p.itp, goals: p.itp.goals.map(g => g.id === gId ? { ...g, shortTermGoals: g.shortTermGoals.filter((_, i) => i !== idx) } : g) } } : p);
+    setPatients(updated);
+    await savePatient(updated.find(p => p.id === pId));
+  };
+
+  const deletePt = async (id) => {
+    if (confirm('Delete this patient?')) {
+      await supabase.from('patients').delete().eq('id', id);
+      setPatients(patients.filter(p => p.id !== id));
+    }
+  };
+
+  const addPatient = async () => {
+    if (!newPt.caseId) return;
+    const pt = { ...newPt, parentIntakeComplete: false, diagnosticAssessments: { ABA: [], Psychiatry: [], Psychology: [], SLP: [], OT: [] }, socialWorkAssessments: [], itp: emptyITP(), treatmentStartDate: null };
+    const { data, error } = await supabase.from('patients').insert([toDb(pt)]);
+    if (!error && data) {
+      setPatients([...patients, fromDb(data[0])]);
+    }
+    setNewPt({ caseId: '', firstName: '', lastName: '', dob: '', parentName: '', insurance: '', primaryDx: '' });
+    setShowAdd(false);
+  };
 
   if (loading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><Loader className="w-8 h-8 animate-spin text-indigo-600" /><span className="ml-2">Loading...</span></div>;
 
@@ -91,14 +253,14 @@ export default function Dashboard() {
       <div className="max-w-6xl mx-auto">
         <div className="flex justify-between items-start mb-3">
           <div><h1 className="text-xl font-bold text-gray-900">Bright Minds Pilot</h1><p className="text-gray-500 text-xs">Social Worker Dashboard</p></div>
-          <div className="text-right">
-            <div className="flex items-center gap-2 text-xs text-gray-500">{saving ? <><Loader className="w-3 h-3 animate-spin" />Saving...</> : lastSaved && <><Save className="w-3 h-3 text-green-600" />Saved {lastSaved}</>}</div>
-            <button onClick={resetData} className="text-xs text-red-500 hover:underline mt-1">Reset Data</button>
+          <div className="flex items-center gap-2">
+            <button onClick={loadPatients} className="flex items-center gap-1 text-xs text-gray-500 hover:text-indigo-600"><RefreshCw className="w-3 h-3" />Refresh</button>
+            <div className="text-xs text-gray-500">{saving ? <><Loader className="w-3 h-3 animate-spin inline" /> Saving...</> : lastSaved && <><Save className="w-3 h-3 text-green-600 inline" /> Saved {lastSaved}</>}</div>
           </div>
         </div>
         
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 mb-3 text-xs text-amber-800">
-          <strong>Privacy Note:</strong> Use case IDs (e.g., BM-001) instead of real names. Data is stored locally in your browser.
+        <div className="bg-green-50 border border-green-200 rounded-lg p-2 mb-3 text-xs text-green-800">
+          <strong>✓ Shared Database:</strong> All team members see the same data. Use case IDs (e.g., BM-001) for privacy.
         </div>
 
         <div className="grid grid-cols-5 gap-2 mb-3">
