@@ -19,6 +19,10 @@ const itpDisc = ['Psychiatry','Psychology','ABA','SLP','OT','Social Work'];
 const schoolSupports = ['Classroom modifications','AAC supports','Behavioral strategies','Sensory accommodations','Academic adaptations','Joint data collection'];
 const caregiverFreq = ['Weekly check-in (SW)','Bi-weekly review (ABA/SLP/OT)','Monthly MDT meeting'];
 
+const measureTypes = ['Percent Correct', 'Frequency', 'Duration', 'Reduction', 'Independence Level'];
+const timepoints = ['baseline', '3month', '6month', '9month', '12month'];
+const tpLabels = { baseline: 'Baseline', '3month': '3-Month', '6month': '6-Month', '9month': '9-Month', '12month': '12-Month' };
+
 const emptyITP = () => ({ 
   clinicians: '', careCoordinator: '', assessmentDate: '',
   goals: [], 
@@ -27,6 +31,89 @@ const emptyITP = () => ({
   signoffs: { parent: { signed: false, date: '' }, socialWorker: { signed: false, date: '' }, psychiatry: { signed: false, date: '' }, psychology: { signed: false, date: '' }, aba: { signed: false, date: '' }, slp: { signed: false, date: '' }, ot: { signed: false, date: '' } }, 
   finalized: false, finalizedDate: ''
 });
+
+// GAP Calculation Functions
+const calcGapValue = (stg, tp) => {
+  const val = parseFloat(stg.data?.[tp]?.value);
+  if (isNaN(val)) return null;
+  if (stg.measureType === 'Percent Correct' || stg.measureType === 'Independence Level') return val;
+  if (stg.measureType === 'Frequency' || stg.measureType === 'Duration') {
+    const target = parseFloat(stg.target);
+    return target > 0 ? Math.min((val / target) * 100, 100) : null;
+  }
+  if (stg.measureType === 'Reduction') {
+    const base = parseFloat(stg.data?.baseline?.value);
+    const mast = parseFloat(stg.target);
+    if (!isNaN(base) && base > mast) return Math.min(((base - val) / (base - mast)) * 100, 100);
+  }
+  return null;
+};
+
+const classifyGoal = (stg, tp) => {
+  if (stg.mastered) return 'Mastered';
+  const tpIdx = timepoints.indexOf(tp);
+  if (tpIdx <= 0) return null;
+  const curr = calcGapValue(stg, tp);
+  const prev = calcGapValue(stg, timepoints[tpIdx - 1]);
+  if (curr === null || prev === null) return null;
+  const diff = curr - prev;
+  if (diff <= -10) return 'Regressing';
+  if (diff >= 10) return 'Progressing';
+  return 'Maintaining';
+};
+
+const calcGapDistribution = (itp, tp) => {
+  const allStgs = itp?.goals?.flatMap(g => g.shortTermGoals) || [];
+  if (allStgs.length === 0) return null;
+  const counts = { Regressing: 0, Maintaining: 0, Progressing: 0, Mastered: 0 };
+  let classified = 0;
+  allStgs.forEach(stg => {
+    if (stg.mastered) { counts.Mastered++; classified++; }
+    else {
+      const cat = classifyGoal(stg, tp);
+      if (cat) { counts[cat]++; classified++; }
+    }
+  });
+  if (classified === 0) return null;
+  return { total: classified, regressing: Math.round((counts.Regressing / classified) * 100), maintaining: Math.round((counts.Maintaining / classified) * 100), progressing: Math.round((counts.Progressing / classified) * 100), mastered: Math.round((counts.Mastered / classified) * 100) };
+};
+
+// Pie Chart Component
+const GapPieChart = ({ gap }) => {
+  if (!gap) return <div className="text-center text-slate-400 text-sm py-6">No GAP data yet. Add goal data to see progress.</div>;
+  const data = [
+    { label: 'Mastered', value: gap.mastered, color: '#10b981' },
+    { label: 'Progressing', value: gap.progressing, color: '#3b82f6' },
+    { label: 'Maintaining', value: gap.maintaining, color: '#f59e0b' },
+    { label: 'Regressing', value: gap.regressing, color: '#ef4444' }
+  ].filter(d => d.value > 0);
+  if (data.length === 0) return <div className="text-center text-slate-400 text-sm py-6">No classified goals yet.</div>;
+  let cum = 0;
+  const slices = data.map(d => { const start = cum; cum += d.value; return { ...d, start, end: cum }; });
+  const getCoord = (pct) => { const a = (pct / 100) * 2 * Math.PI - Math.PI / 2; return { x: 50 + 40 * Math.cos(a), y: 50 + 40 * Math.sin(a) }; };
+  return (
+    <div className="flex items-center gap-6">
+      <svg viewBox="0 0 100 100" className="w-28 h-28">
+        {slices.map((s, i) => {
+          if (s.value === 100) return <circle key={i} cx="50" cy="50" r="40" fill={s.color} />;
+          const start = getCoord(s.start);
+          const end = getCoord(s.end);
+          const large = s.value > 50 ? 1 : 0;
+          return <path key={i} d={`M50,50 L${start.x},${start.y} A40,40 0 ${large},1 ${end.x},${end.y} Z`} fill={s.color} />;
+        })}
+      </svg>
+      <div className="space-y-1.5">
+        {data.map(d => (
+          <div key={d.label} className="flex items-center gap-2 text-xs">
+            <div className="w-3 h-3 rounded" style={{ backgroundColor: d.color }} />
+            <span className="text-slate-600">{d.label}: {d.value}%</span>
+          </div>
+        ))}
+        <div className="text-xs text-slate-400 pt-1 border-t border-slate-100">Total: {gap.total} goals</div>
+      </div>
+    </div>
+  );
+};
 
 const toDb = (p) => ({ case_id: p.caseId, first_name: p.firstName, last_name: p.lastName, dob: p.dob || null, primary_dx: p.primaryDx, parent_intake_complete: p.parentIntakeComplete, diagnostic_assessments: p.diagnosticAssessments, social_work_assessments: p.socialWorkAssessments, itp: p.itp, treatment_start_date: p.treatmentStartDate || null });
 const fromDb = (r) => ({ id: r.id, caseId: r.case_id || '', firstName: r.first_name || '', lastName: r.last_name || '', dob: r.dob || '', primaryDx: r.primary_dx || '', parentIntakeComplete: r.parent_intake_complete || false, diagnosticAssessments: r.diagnostic_assessments || { ABA: [], Psychiatry: [], Psychology: [], SLP: [], OT: [] }, socialWorkAssessments: r.social_work_assessments || [], itp: r.itp || emptyITP(), treatmentStartDate: r.treatment_start_date || null });
@@ -39,6 +126,7 @@ export default function App() {
   const [section, setSection] = useState('info');
   const [showAdd, setShowAdd] = useState(false);
   const [newPt, setNewPt] = useState({ caseId: '', firstName: '', lastName: '', primaryDx: '' });
+  const [gapTp, setGapTp] = useState('3month');
 
   const load = async () => { 
     setLoading(true); 
@@ -108,7 +196,20 @@ export default function App() {
   const addGoal = async (id) => { 
     const pt = patients.find(p => p.id === id); 
     if (pt.itp.finalized) return;
-    const newGoal = { id: Date.now(), discipline: '', domain: '', longTermGoal: '', shortTermGoals: [{ id: Date.now(), goal: '', measure: '', criteria: '' }] };
+    const newGoal = { 
+      id: Date.now(), 
+      discipline: '', 
+      domain: '', 
+      longTermGoal: '', 
+      shortTermGoals: [{ 
+        id: Date.now(), 
+        goal: '', 
+        measureType: 'Percent Correct', 
+        target: '80', 
+        mastered: false,
+        data: { baseline: { value: '' }, '3month': { value: '' }, '6month': { value: '' }, '9month': { value: '' }, '12month': { value: '' } }
+      }] 
+    };
     await updateItp(id, 'goals', [...(pt.itp.goals || []), newGoal]);
   };
 
@@ -128,7 +229,36 @@ export default function App() {
   const addSTG = async (pId, gId) => { 
     const pt = patients.find(p => p.id === pId); 
     if (pt.itp.finalized) return;
-    const goals = pt.itp.goals.map(g => g.id === gId ? { ...g, shortTermGoals: [...g.shortTermGoals, { id: Date.now(), goal: '', measure: '', criteria: '' }] } : g);
+    const newStg = { 
+      id: Date.now(), 
+      goal: '', 
+      measureType: 'Percent Correct', 
+      target: '80', 
+      mastered: false,
+      data: { baseline: { value: '' }, '3month': { value: '' }, '6month': { value: '' }, '9month': { value: '' }, '12month': { value: '' } }
+    };
+    const goals = pt.itp.goals.map(g => g.id === gId ? { ...g, shortTermGoals: [...g.shortTermGoals, newStg] } : g);
+    await updateItp(pId, 'goals', goals);
+  };
+
+  const updateSTGData = async (pId, gId, sId, tp, value) => {
+    const pt = patients.find(p => p.id === pId);
+    const goals = pt.itp.goals.map(g => g.id === gId ? { 
+      ...g, 
+      shortTermGoals: g.shortTermGoals.map(s => s.id === sId ? { 
+        ...s, 
+        data: { ...s.data, [tp]: { value } } 
+      } : s) 
+    } : g);
+    await updateItp(pId, 'goals', goals);
+  };
+
+  const toggleMastered = async (pId, gId, sId) => {
+    const pt = patients.find(p => p.id === pId);
+    const goals = pt.itp.goals.map(g => g.id === gId ? { 
+      ...g, 
+      shortTermGoals: g.shortTermGoals.map(s => s.id === sId ? { ...s, mastered: !s.mastered } : s) 
+    } : g);
     await updateItp(pId, 'goals', goals);
   };
 
@@ -388,10 +518,30 @@ export default function App() {
                           <textarea value={g.longTermGoal} onChange={e => updateGoal(selPt.id, g.id, 'longTermGoal', e.target.value)} disabled={selPt.itp.finalized} placeholder="Long Term Goal: PATIENT will [goal] for X consecutive days/weeks across X people and X settings." className="w-full px-2 py-1 bg-white rounded text-xs resize-none h-16 mb-2" />
                           <p className="text-xs text-slate-400 mb-1">Short Term Goals</p>
                           {g.shortTermGoals.map(s => (
-                            <div key={s.id} className="flex gap-1 mb-1">
-                              <input value={s.goal} onChange={e => updateSTG(selPt.id, g.id, s.id, 'goal', e.target.value)} disabled={selPt.itp.finalized} placeholder="Short term goal" className="flex-1 px-2 py-1 bg-white rounded text-xs" />
-                              <input value={s.measure} onChange={e => updateSTG(selPt.id, g.id, s.id, 'measure', e.target.value)} disabled={selPt.itp.finalized} placeholder="Measure" className="w-24 px-2 py-1 bg-white rounded text-xs" />
-                              <input value={s.criteria} onChange={e => updateSTG(selPt.id, g.id, s.id, 'criteria', e.target.value)} disabled={selPt.itp.finalized} placeholder="Criteria" className="w-24 px-2 py-1 bg-white rounded text-xs" />
+                            <div key={s.id} className="p-2 bg-white rounded mb-1">
+                              <div className="flex gap-1 mb-2">
+                                <input value={s.goal} onChange={e => updateSTG(selPt.id, g.id, s.id, 'goal', e.target.value)} disabled={selPt.itp.finalized} placeholder="Short term goal" className="flex-1 px-2 py-1 bg-slate-50 rounded text-xs" />
+                                <select value={s.measureType} onChange={e => updateSTG(selPt.id, g.id, s.id, 'measureType', e.target.value)} disabled={selPt.itp.finalized} className="px-2 py-1 bg-slate-50 rounded text-xs">
+                                  {measureTypes.map(m => <option key={m}>{m}</option>)}
+                                </select>
+                                <input value={s.target} onChange={e => updateSTG(selPt.id, g.id, s.id, 'target', e.target.value)} disabled={selPt.itp.finalized} placeholder="Target" className="w-16 px-2 py-1 bg-slate-50 rounded text-xs" />
+                                <button onClick={() => toggleMastered(selPt.id, g.id, s.id)} className={`px-2 py-1 rounded text-xs whitespace-nowrap ${s.mastered ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                                  {s.mastered ? '✓ Mastered' : 'Mastered?'}
+                                </button>
+                              </div>
+                              <div className="flex gap-1 items-center">
+                                <span className="text-xs text-slate-400 w-12">Data:</span>
+                                {timepoints.map(tp => (
+                                  <div key={tp} className="flex-1">
+                                    <input 
+                                      value={s.data?.[tp]?.value || ''} 
+                                      onChange={e => updateSTGData(selPt.id, g.id, s.id, tp, e.target.value)} 
+                                      placeholder={tpLabels[tp]} 
+                                      className="w-full px-1 py-0.5 bg-slate-50 rounded text-xs text-center" 
+                                    />
+                                  </div>
+                                ))}
+                              </div>
                             </div>
                           ))}
                           {!selPt.itp.finalized && (
