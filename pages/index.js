@@ -28,6 +28,9 @@ const emptyMeeting = () => ({ patientId: '', patientName: '', date: '', time: ''
 const toDb = (p) => ({ case_id: p.caseId, first_name: p.firstName, last_name: p.lastName, dob: p.dob || null, parent_name: p.parentName, insurance: p.insurance, primary_dx: p.primaryDx, parent_intake_complete: p.parentIntakeComplete, diagnostic_assessments: p.diagnosticAssessments, social_work_assessments: p.socialWorkAssessments, itp: p.itp, treatment_start_date: p.treatmentStartDate || null });
 const fromDb = (r) => ({ id: r.id, caseId: r.case_id, firstName: r.first_name || '', lastName: r.last_name || '', dob: r.dob || '', parentName: r.parent_name || '', insurance: r.insurance || '', primaryDx: r.primary_dx || '', parentIntakeComplete: r.parent_intake_complete || false, diagnosticAssessments: r.diagnostic_assessments || { ABA: [], Psychiatry: [], Psychology: [], SLP: [], OT: [] }, socialWorkAssessments: r.social_work_assessments || [], itp: r.itp || emptyITP(), treatmentStartDate: r.treatment_start_date || null });
 
+const mtToDb = (m) => ({ patient_id: m.patientId, patient_name: m.patientName, date: m.date, time: m.time, type: m.type, frequency: m.frequency, location: m.location, facilitator: m.facilitator, next_date: m.nextDate, next_type: m.nextType, status: m.status, attendees: m.attendees, absence_notes: m.absenceNotes, safeguarding_concerns: m.safeguardingConcerns, previous_action_review: m.previousActionReview, case_review: m.caseReview, decisions: m.decisions, school_collab: m.schoolCollab, action_items: m.actionItems, kpis: m.kpis, quarterly_review: m.quarterlyReview });
+const mtFromDb = (r) => ({ id: r.id, patientId: r.patient_id, patientName: r.patient_name || '', date: r.date || '', time: r.time || '', type: r.type || '', frequency: r.frequency || '', location: r.location || '', facilitator: r.facilitator || '', nextDate: r.next_date || '', nextType: r.next_type || '', status: r.status || 'Scheduled', attendees: r.attendees || '', absenceNotes: r.absence_notes || '', safeguardingConcerns: r.safeguarding_concerns || '', previousActionReview: r.previous_action_review || '', caseReview: r.case_review || disciplines.reduce((a, d) => ({ ...a, [d]: { updates: '', risks: '', actions: '' } }), {}), decisions: r.decisions || '', schoolCollab: r.school_collab || disciplines.slice(1).reduce((a, d) => ({ ...a, [d]: { itpAlignment: '', teacherFeedback: '', classroomNeeds: '' } }), {}), actionItems: r.action_items || [], kpis: r.kpis || kpiList.map(k => ({ ...k, current: '', notes: '' })), quarterlyReview: r.quarterly_review || quarterlyAreas.map(a => ({ area: a, summary: '', recommendations: '' })) });
+
 export default function App() {
   const [patients, setPatients] = useState([]);
   const [meetings, setMeetings] = useState([]);
@@ -43,7 +46,16 @@ export default function App() {
   const [newPt, setNewPt] = useState({ caseId: '', firstName: '', lastName: '', dob: '', primaryDx: '' });
   const [newMt, setNewMt] = useState({ patientId: '', date: '', time: '', type: '', frequency: '' });
 
-  const load = async () => { setLoading(true); try { const { data } = await supabase.from('patients').select(); if (data && Array.isArray(data)) setPatients(data.map(fromDb)); } catch (e) { console.error(e); } setLoading(false); };
+  const load = async () => { 
+    setLoading(true); 
+    try { 
+      const { data: pData } = await supabase.from('patients').select(); 
+      if (pData && Array.isArray(pData)) setPatients(pData.map(fromDb)); 
+      const { data: mData } = await supabase.from('meetings').select(); 
+      if (mData && Array.isArray(mData)) setMeetings(mData.map(mtFromDb)); 
+    } catch (e) { console.error(e); } 
+    setLoading(false); 
+  };
   useEffect(() => { load(); }, []);
 
   const save = async (pt) => { setSaving(true); await supabase.from('patients').update(toDb(pt)).eq('id', pt.id); setSaving(false); };
@@ -68,9 +80,18 @@ export default function App() {
   const addPatient = async () => { if (!newPt.caseId) return; const pt = { ...newPt, parentIntakeComplete: false, diagnosticAssessments: { ABA: [], Psychiatry: [], Psychology: [], SLP: [], OT: [] }, socialWorkAssessments: [], itp: emptyITP(), treatmentStartDate: null }; const { data } = await supabase.from('patients').insert([toDb(pt)]); if (data) setPatients([fromDb(data[0]), ...patients]); setNewPt({ caseId: '', firstName: '', lastName: '', dob: '', primaryDx: '' }); setShowAdd(false); };
   const allSigned = (p) => Object.values(p.itp.signoffs).every(s => s.signed);
 
-  const addMeeting = () => { if (!newMt.patientId || !newMt.date) return; const pt = patients.find(p => p.id === parseInt(newMt.patientId)); const mt = { id: Date.now(), ...emptyMeeting(), ...newMt, patientId: parseInt(newMt.patientId), patientName: pt ? `${pt.caseId} - ${pt.firstName} ${pt.lastName}` : '' }; setMeetings([mt, ...meetings]); setNewMt({ patientId: '', date: '', time: '', type: '', frequency: '' }); setShowAddMt(false); };
-  const updateMt = (id, u) => { const upd = meetings.map(m => m.id === id ? { ...m, ...u } : m); setMeetings(upd); if (selMt?.id === id) setSelMt(upd.find(m => m.id === id)); };
-  const deleteMt = (id) => { if (confirm('Delete?')) { setMeetings(meetings.filter(m => m.id !== id)); if (selMt?.id === id) setSelMt(null); } };
+  const addMeeting = async () => { 
+    if (!newMt.patientId || !newMt.date) return; 
+    const pt = patients.find(p => p.id === parseInt(newMt.patientId)); 
+    const mt = { ...emptyMeeting(), ...newMt, patientId: parseInt(newMt.patientId), patientName: pt ? `${pt.caseId} - ${pt.firstName} ${pt.lastName}` : '' }; 
+    const { data } = await supabase.from('meetings').insert([mtToDb(mt)]); 
+    if (data && data[0]) setMeetings([mtFromDb(data[0]), ...meetings]); 
+    setNewMt({ patientId: '', date: '', time: '', type: '', frequency: '' }); 
+    setShowAddMt(false); 
+  };
+  const saveMt = async (mt) => { setSaving(true); await supabase.from('meetings').update(mtToDb(mt)).eq('id', mt.id); setSaving(false); };
+  const updateMt = async (id, u) => { const upd = meetings.map(m => m.id === id ? { ...m, ...u } : m); setMeetings(upd); const mt = upd.find(m => m.id === id); if (selMt?.id === id) setSelMt(mt); await saveMt(mt); };
+  const deleteMt = async (id) => { if (confirm('Delete?')) { await supabase.from('meetings').delete().eq('id', id); setMeetings(meetings.filter(m => m.id !== id)); if (selMt?.id === id) setSelMt(null); } };
   const addAction = (mid) => { const m = meetings.find(x => x.id === mid); updateMt(mid, { actionItems: [...(m.actionItems || []), { id: Date.now(), action: '', owner: '', deadline: '', status: 'Pending' }] }); };
   const updateAction = (mid, aid, f, v) => { const m = meetings.find(x => x.id === mid); updateMt(mid, { actionItems: m.actionItems.map(a => a.id === aid ? { ...a, [f]: v } : a) }); };
   const updateCaseReview = (mid, disc, f, v) => { const m = meetings.find(x => x.id === mid); updateMt(mid, { caseReview: { ...m.caseReview, [disc]: { ...m.caseReview[disc], [f]: v } } }); };
