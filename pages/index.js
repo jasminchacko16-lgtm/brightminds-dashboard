@@ -739,5 +739,7 @@ export default function Dashboard() {
           </div>
         </div>
       )}
-
-      {
+      {showPreview && <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg"><div className="p-6 border-b border-slate-100 flex justify-between"><h3 className="text-lg font-semibold text-slate-800">Summary</h3><button onClick={() => setShowPreview(null)} className="p-2 rounded-full hover:bg-slate-100"><X className="w-5 h-5 text-slate-400" /></button></div><div className="p-6 space-y-4"><p className="font-medium text-slate-700">{showPreview.caseId} — {showPreview.firstName} {showPreview.lastName}</p><p className="text-sm text-slate-500">DOB: {showPreview.dob || 'N/A'} | Dx: {showPreview.primaryDx || 'N/A'}</p><div className="flex items-center gap-2"><span className="text-sm text-slate-500">Phase:</span><span className={`px-3 py-1 rounded-full text-sm font-medium ${phaseBadge(getPhase(showPreview).color)}`}>{getPhase(showPreview).label}</span></div><div className="text-sm text-slate-600 space-y-1"><p>Diagnostics: {Object.values(showPreview.diagnosticAssessments).flat().length}/{Object.values(diagAssess).flat().length}</p><p>SW: {showPreview.socialWorkAssessments.length}/{swAssess.length}</p><p>Goals: {showPreview.itp.goals.length}</p><p>Sign-offs: {Object.values(showPreview.itp.signoffs).filter(s => s.signed).length}/7</p></div></div></div></div>}
+    </div>
+  );
+}
