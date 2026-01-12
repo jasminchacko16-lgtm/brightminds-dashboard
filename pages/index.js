@@ -1,4 +1,136 @@
-import { useState, useEffect } from 'react';
+)}
+          </div>
+        </div>
+      </div>
+
+      {/* Meeting Detail View */}
+      {view === 'meetings' && selMt && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-40 p-4" onClick={() => setSelMt(null)}>
+          <div className="bg-white rounded-xl w-full max-w-4xl max-h-[90vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+              <div>
+                <h3 className="font-semibold text-slate-800">{selMt.type || 'MDT Meeting'}</h3>
+                <p className="text-sm text-slate-400">{selMt.patientName}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <select value={selMt.status} onChange={e => updateMt(selMt.id, { status: e.target.value })} className={`px-3 py-1 rounded-full text-xs font-medium ${selMt.status === 'Completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'}`}>
+                  <option>Scheduled</option>
+                  <option>Completed</option>
+                  <option>Cancelled</option>
+                </select>
+                <button onClick={() => deleteMt(selMt.id)} className="p-2 hover:bg-red-50 rounded-full">
+                  <X className="w-4 h-4 text-slate-400 hover:text-red-500" />
+                </button>
+              </div>
+            </div>
+            <div className="p-4 max-h-[calc(90vh-80px)] overflow-auto space-y-4">
+              {/* Meeting Info */}
+              <div className="grid grid-cols-3 gap-3">
+                <Input label="Date" type="date" value={selMt.date} onChange={v => updateMt(selMt.id, { date: v })} />
+                <Input label="Time" type="time" value={selMt.time} onChange={v => updateMt(selMt.id, { time: v })} />
+                <div>
+                  <label className="text-xs font-medium text-slate-400 uppercase">Type</label>
+                  <select value={selMt.type} onChange={e => updateMt(selMt.id, { type: e.target.value })} className="w-full mt-1 p-2 bg-slate-50 border-0 rounded-lg text-sm">
+                    <option value="">Select...</option>
+                    {meetingTypes.map(t => <option key={t}>{t}</option>)}
+                  </select>
+                </div>
+                <Input label="Location" value={selMt.location} onChange={v => updateMt(selMt.id, { location: v })} />
+                <Input label="Facilitator" value={selMt.facilitator} onChange={v => updateMt(selMt.id, { facilitator: v })} />
+                <div>
+                  <label className="text-xs font-medium text-slate-400 uppercase">Frequency</label>
+                  <select value={selMt.frequency} onChange={e => updateMt(selMt.id, { frequency: e.target.value })} className="w-full mt-1 p-2 bg-slate-50 border-0 rounded-lg text-sm">
+                    <option value="">Select...</option>
+                    {frequencies.map(f => <option key={f}>{f}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {/* Next Meeting */}
+              <div className="p-3 bg-slate-50 rounded-lg">
+                <p className="text-xs font-medium text-slate-500 mb-2">Next Meeting</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <Input label="Date" type="date" value={selMt.nextDate} onChange={v => updateMt(selMt.id, { nextDate: v })} />
+                  <div>
+                    <label className="text-xs font-medium text-slate-400 uppercase">Type</label>
+                    <select value={selMt.nextType} onChange={e => updateMt(selMt.id, { nextType: e.target.value })} className="w-full mt-1 p-2 bg-white border-0 rounded-lg text-sm">
+                      <option value="">Select...</option>
+                      {frequencies.map(f => <option key={f}>{f}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Administrative Review */}
+              <div className="p-3 bg-slate-50 rounded-lg">
+                <p className="text-xs font-medium text-slate-500 mb-2">Administrative Review</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <TextArea label="Attendees" value={selMt.attendees} onChange={v => updateMt(selMt.id, { attendees: v })} />
+                  <TextArea label="Notes on Absences" value={selMt.absenceNotes} onChange={v => updateMt(selMt.id, { absenceNotes: v })} />
+                  <TextArea label="Safeguarding Concerns" value={selMt.safeguardingConcerns} onChange={v => updateMt(selMt.id, { safeguardingConcerns: v })} />
+                  <TextArea label="Review of Previous Action Items" value={selMt.previousActionReview} onChange={v => updateMt(selMt.id, { previousActionReview: v })} />
+                </div>
+              </div>
+
+              {/* Case Review */}
+              <div className="p-3 bg-slate-50 rounded-lg">
+                <p className="text-xs font-medium text-slate-500 mb-2">Case-by-Case Review</p>
+                <div className="space-y-2">
+                  {disciplines.map(d => (
+                    <div key={d} className="p-2 bg-white rounded">
+                      <p className="text-xs font-medium text-slate-600 mb-2">{d}</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <label className="text-xs text-slate-400">Key Updates</label>
+                          <textarea value={selMt.caseReview?.[d]?.updates || ''} onChange={e => updateCaseReview(selMt.id, d, 'updates', e.target.value)} className="w-full p-1.5 bg-slate-50 rounded text-xs resize-none h-12" />
+                        </div>
+                        <div>
+                          <label className="text-xs text-slate-400">Risks/Barriers</label>
+                          <textarea value={selMt.caseReview?.[d]?.risks || ''} onChange={e => updateCaseReview(selMt.id, d, 'risks', e.target.value)} className="w-full p-1.5 bg-slate-50 rounded text-xs resize-none h-12" />
+                        </div>
+                        <div>
+                          <label className="text-xs text-slate-400">Required Actions</label>
+                          <textarea value={selMt.caseReview?.[d]?.actions || ''} onChange={e => updateCaseReview(selMt.id, d, 'actions', e.target.value)} className="w-full p-1.5 bg-slate-50 rounded text-xs resize-none h-12" />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <TextArea label="Decisions Made" value={selMt.decisions} onChange={v => updateMt(selMt.id, { decisions: v })} />
+              </div>
+
+              {/* Action Items */}
+              <div className="p-3 bg-slate-50 rounded-lg">
+                <div className="flex justify-between items-center mb-2">
+                  <p className="text-xs font-medium text-slate-500">Action Items</p>
+                  <button onClick={() => addAction(selMt.id)} className="text-xs text-teal-600 flex items-center gap-1">
+                    <Plus className="w-3 h-3" />Add
+                  </button>
+                </div>
+                {(!selMt.actionItems || selMt.actionItems.length === 0) ? (
+                  <p className="text-xs text-slate-400 text-center py-2">No action items</p>
+                ) : (
+                  <div className="space-y-2">
+                    {selMt.actionItems.map(a => (
+                      <div key={a.id} className="p-2 bg-white rounded flex gap-2">
+                        <input value={a.action} onChange={e => updateAction(selMt.id, a.id, 'action', e.target.value)} placeholder="Action..." className="flex-1 px-2 py-1 bg-slate-50 rounded text-xs" />
+                        <input value={a.owner} onChange={e => updateAction(selMt.id, a.id, 'owner', e.target.value)} placeholder="Owner" className="w-24 px-2 py-1 bg-slate-50 rounded text-xs" />
+                        <input type="date" value={a.deadline} onChange={e => updateAction(selMt.id, a.id, 'deadline', e.target.value)} className="px-2 py-1 bg-slate-50 rounded text-xs" />
+                        <select value={a.status} onChange={e => updateAction(selMt.id, a.id, 'status', e.target.value)} className={`px-2 py-1 rounded text-xs ${a.status === 'Completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50'}`}>
+                          <option>Pending</option>
+                          <option>Completed</option>
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Patient Modal */}import { useState, useEffect } from 'react';
 import { ChevronRight, ChevronDown, Plus, X, Check, Lock, RefreshCw, User, Calendar, FileText, Heart, Users, Target, School } from 'lucide-react';
 
 const SUPABASE_URL = 'https://igkwugfefllkutthnjwi.supabase.co';
@@ -18,6 +150,20 @@ const swAssess = ['SES Assessment','Eco-Map','Genogram','Family Needs','CANS'];
 const itpDisc = ['Psychiatry','Psychology','ABA','SLP','OT','Social Work'];
 const schoolSupports = ['Classroom modifications','AAC supports','Behavioral strategies','Sensory accommodations','Academic adaptations','Joint data collection'];
 const caregiverFreq = ['Weekly check-in (SW)','Bi-weekly review (ABA/SLP/OT)','Monthly MDT meeting'];
+
+const meetingTypes = ['Team Huddle', 'Case Review', 'Program Review', 'Training Updates', 'Family Advisory Council'];
+const frequencies = ['Weekly', 'Bi-Weekly', 'Monthly (PR)', 'Monthly (TU)', 'Quarterly'];
+const disciplines = ['Care Coordination', 'Psychiatry', 'Psychology', 'ABA', 'SLP', 'OT'];
+
+const emptyMeeting = () => ({ 
+  patientId: '', patientName: '', date: '', time: '', type: '', frequency: '', location: '', facilitator: '', 
+  nextDate: '', nextType: '', status: 'Scheduled', attendees: '', absenceNotes: '', safeguardingConcerns: '', 
+  previousActionReview: '', caseReview: disciplines.reduce((a, d) => ({ ...a, [d]: { updates: '', risks: '', actions: '' } }), {}), 
+  decisions: '', actionItems: [] 
+});
+
+const mtToDb = (m) => ({ patient_id: m.patientId, patient_name: m.patientName, date: m.date, time: m.time, type: m.type, frequency: m.frequency, location: m.location, facilitator: m.facilitator, next_date: m.nextDate, next_type: m.nextType, status: m.status, attendees: m.attendees, absence_notes: m.absenceNotes, safeguarding_concerns: m.safeguardingConcerns, previous_action_review: m.previousActionReview, case_review: m.caseReview, decisions: m.decisions, action_items: m.actionItems });
+const mtFromDb = (r) => ({ id: r.id, patientId: r.patient_id, patientName: r.patient_name || '', date: r.date || '', time: r.time || '', type: r.type || '', frequency: r.frequency || '', location: r.location || '', facilitator: r.facilitator || '', nextDate: r.next_date || '', nextType: r.next_type || '', status: r.status || 'Scheduled', attendees: r.attendees || '', absenceNotes: r.absence_notes || '', safeguardingConcerns: r.safeguarding_concerns || '', previousActionReview: r.previous_action_review || '', caseReview: r.case_review || disciplines.reduce((a, d) => ({ ...a, [d]: { updates: '', risks: '', actions: '' } }), {}), decisions: r.decisions || '', actionItems: r.action_items || [] });
 
 const measureTypes = ['Percent Correct', 'Frequency', 'Duration', 'Reduction', 'Independence Level'];
 const timepoints = ['baseline', '3month', '6month', '9month', '12month'];
@@ -120,19 +266,26 @@ const fromDb = (r) => ({ id: r.id, caseId: r.case_id || '', firstName: r.first_n
 
 export default function App() {
   const [patients, setPatients] = useState([]);
+  const [meetings, setMeetings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [view, setView] = useState('patients');
   const [selPt, setSelPt] = useState(null);
+  const [selMt, setSelMt] = useState(null);
   const [section, setSection] = useState('info');
   const [showAdd, setShowAdd] = useState(false);
+  const [showAddMt, setShowAddMt] = useState(false);
   const [newPt, setNewPt] = useState({ caseId: '', firstName: '', lastName: '', primaryDx: '' });
+  const [newMt, setNewMt] = useState({ patientId: '', date: '', time: '', type: '', frequency: '' });
   const [gapTp, setGapTp] = useState('3month');
 
   const load = async () => { 
     setLoading(true); 
     try { 
       const { data } = await supabase.from('patients').select(); 
-      if (data && Array.isArray(data)) setPatients(data.map(fromDb)); 
+      if (data && Array.isArray(data)) setPatients(data.map(fromDb));
+      const { data: mData } = await supabase.from('meetings').select();
+      if (mData && Array.isArray(mData)) setMeetings(mData.map(mtFromDb));
     } catch (e) { console.error(e); } 
     setLoading(false); 
   };
@@ -310,6 +463,51 @@ export default function App() {
   const allSigned = (p) => Object.values(p.itp.signoffs).every(s => s.signed);
   const phaseBadge = (c) => c === 'amber' ? 'bg-amber-50 text-amber-600' : c === 'blue' ? 'bg-blue-50 text-blue-600' : c === 'violet' ? 'bg-violet-50 text-violet-600' : c === 'emerald' ? 'bg-emerald-50 text-emerald-600' : 'bg-indigo-50 text-indigo-600';
 
+  // Meeting functions
+  const addMeeting = async () => {
+    if (!newMt.patientId || !newMt.date) return;
+    const pt = patients.find(p => p.id === parseInt(newMt.patientId));
+    const mt = { ...emptyMeeting(), ...newMt, patientId: parseInt(newMt.patientId), patientName: pt ? `${pt.caseId} - ${pt.firstName} ${pt.lastName}` : '' };
+    const { data } = await supabase.from('meetings').insert([mtToDb(mt)]);
+    if (data?.[0]) setMeetings([mtFromDb(data[0]), ...meetings]);
+    setNewMt({ patientId: '', date: '', time: '', type: '', frequency: '' });
+    setShowAddMt(false);
+  };
+
+  const saveMt = async (mt) => { setSaving(true); await supabase.from('meetings').update(mtToDb(mt)).eq('id', mt.id); setSaving(false); };
+
+  const updateMt = async (id, u) => {
+    const upd = meetings.map(m => m.id === id ? { ...m, ...u } : m);
+    setMeetings(upd);
+    const mt = upd.find(m => m.id === id);
+    if (selMt?.id === id) setSelMt(mt);
+    await saveMt(mt);
+  };
+
+  const deleteMt = async (id) => {
+    if (confirm('Delete this meeting?')) {
+      await supabase.from('meetings').delete().eq('id', id);
+      setMeetings(meetings.filter(m => m.id !== id));
+      if (selMt?.id === id) setSelMt(null);
+    }
+  };
+
+  const addAction = async (mid) => {
+    const m = meetings.find(x => x.id === mid);
+    await updateMt(mid, { actionItems: [...(m.actionItems || []), { id: Date.now(), action: '', owner: '', deadline: '', status: 'Pending' }] });
+  };
+
+  const updateAction = async (mid, aid, field, value) => {
+    const m = meetings.find(x => x.id === mid);
+    await updateMt(mid, { actionItems: m.actionItems.map(a => a.id === aid ? { ...a, [field]: value } : a) });
+  };
+
+  const updateCaseReview = async (mid, disc, field, value) => {
+    const m = meetings.find(x => x.id === mid);
+    const cr = { ...m.caseReview, [disc]: { ...m.caseReview[disc], [field]: value } };
+    await updateMt(mid, { caseReview: cr });
+  };
+
   // Components
   const Input = ({ label, value, onChange, type = 'text', disabled = false, className = '' }) => (
     <div className={className}>
@@ -353,14 +551,18 @@ export default function App() {
               <Heart className="w-4 h-4 text-white" />
             </div>
             <h1 className="font-semibold text-slate-800">Bright Minds</h1>
+            <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-full ml-4">
+              <button onClick={() => { setView('patients'); setSelMt(null); }} className={`px-3 py-1 rounded-full text-xs font-medium ${view === 'patients' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}>Patients</button>
+              <button onClick={() => { setView('meetings'); setSelPt(null); }} className={`px-3 py-1 rounded-full text-xs font-medium ${view === 'meetings' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}>MDT Meetings</button>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             {saving && <span className="text-xs text-slate-400">Saving...</span>}
             <button onClick={load} className="p-2 hover:bg-slate-100 rounded-full">
               <RefreshCw className="w-4 h-4 text-slate-400" />
             </button>
-            <button onClick={() => setShowAdd(true)} className="h-8 px-3 bg-slate-900 text-white text-sm rounded-full flex items-center gap-1">
-              <Plus className="w-4 h-4" />New Patient
+            <button onClick={() => view === 'patients' ? setShowAdd(true) : setShowAddMt(true)} className="h-8 px-3 bg-slate-900 text-white text-sm rounded-full flex items-center gap-1">
+              <Plus className="w-4 h-4" />New {view === 'patients' ? 'Patient' : 'Meeting'}
             </button>
           </div>
         </div>
@@ -371,23 +573,38 @@ export default function App() {
         <div className="w-64 flex-shrink-0">
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
             <div className="p-3 border-b border-slate-100">
-              <h2 className="font-medium text-slate-700 text-sm">Patients ({patients.length})</h2>
+              <h2 className="font-medium text-slate-700 text-sm">{view === 'patients' ? `Patients (${patients.length})` : `Meetings (${meetings.length})`}</h2>
             </div>
             <div className="max-h-[calc(100vh-180px)] overflow-auto">
-              {patients.length === 0 ? (
-                <div className="p-6 text-center text-slate-400 text-sm">No patients yet</div>
-              ) : patients.map(pt => {
-                const ph = getPhase(pt);
-                return (
-                  <div key={pt.id} onClick={() => { setSelPt(pt); setSection('info'); }} className={`p-3 cursor-pointer border-b border-slate-50 ${selPt?.id === pt.id ? 'bg-slate-50' : 'hover:bg-slate-50'}`}>
-                    <div className="flex justify-between items-start mb-1">
-                      <span className="font-medium text-slate-700 text-sm">{pt.caseId}</span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${phaseBadge(ph.color)}`}>{ph.label}</span>
+              {view === 'patients' ? (
+                patients.length === 0 ? (
+                  <div className="p-6 text-center text-slate-400 text-sm">No patients yet</div>
+                ) : patients.map(pt => {
+                  const ph = getPhase(pt);
+                  return (
+                    <div key={pt.id} onClick={() => { setSelPt(pt); setSection('info'); }} className={`p-3 cursor-pointer border-b border-slate-50 ${selPt?.id === pt.id ? 'bg-slate-50' : 'hover:bg-slate-50'}`}>
+                      <div className="flex justify-between items-start mb-1">
+                        <span className="font-medium text-slate-700 text-sm">{pt.caseId}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${phaseBadge(ph.color)}`}>{ph.label}</span>
+                      </div>
+                      <p className="text-xs text-slate-400">{pt.firstName} {pt.lastName}</p>
                     </div>
-                    <p className="text-xs text-slate-400">{pt.firstName} {pt.lastName}</p>
+                  );
+                })
+              ) : (
+                meetings.length === 0 ? (
+                  <div className="p-6 text-center text-slate-400 text-sm">No meetings yet</div>
+                ) : meetings.map(mt => (
+                  <div key={mt.id} onClick={() => setSelMt(mt)} className={`p-3 cursor-pointer border-b border-slate-50 ${selMt?.id === mt.id ? 'bg-slate-50' : 'hover:bg-slate-50'}`}>
+                    <div className="flex justify-between items-start mb-1">
+                      <span className="font-medium text-slate-700 text-sm">{mt.type || 'Meeting'}</span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${mt.status === 'Completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'}`}>{mt.status}</span>
+                    </div>
+                    <p className="text-xs text-slate-400">{mt.patientName}</p>
+                    <p className="text-xs text-slate-300 mt-1">{mt.date} {mt.time}</p>
                   </div>
-                );
-              })}
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -648,7 +865,28 @@ export default function App() {
                 )}
 
                 {section === 'treatment' && (
-                  <div>
+                  <div className="space-y-4">
+                    {/* GAP Section */}
+                    <div className="p-4 bg-white border border-slate-200 rounded-lg">
+                      <div className="flex justify-between items-center mb-4">
+                        <h3 className="font-medium text-slate-700">Goal Attainment Percentage (GAP)</h3>
+                        <select value={gapTp} onChange={e => setGapTp(e.target.value)} className="px-2 py-1 bg-slate-50 rounded text-xs">
+                          {timepoints.filter(t => t !== 'baseline').map(tp => (
+                            <option key={tp} value={tp}>{tpLabels[tp]}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <GapPieChart gap={calcGapDistribution(selPt.itp, gapTp)} />
+                      <div className="mt-4 p-3 bg-slate-50 rounded text-xs text-slate-500">
+                        <p className="font-medium text-slate-600 mb-1">GAP Categories:</p>
+                        <p>• <span className="text-red-500">Regressing:</span> ≥10% decrease from previous</p>
+                        <p>• <span className="text-amber-500">Maintaining:</span> -9% to +9% change</p>
+                        <p>• <span className="text-blue-500">Progressing:</span> ≥10% increase</p>
+                        <p>• <span className="text-emerald-500">Mastered:</span> Goal criteria met</p>
+                      </div>
+                    </div>
+
+                    {/* Treatment Status */}
                     {selPt.treatmentStartDate ? (
                       <div className="p-6 bg-emerald-50 rounded-lg text-center">
                         <Heart className="w-10 h-10 text-emerald-500 mx-auto mb-2" />
