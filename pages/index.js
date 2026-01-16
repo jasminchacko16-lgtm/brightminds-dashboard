@@ -62,6 +62,7 @@ export default function App() {
   const [newMt, setNewMt] = useState({ patientId: '', date: '', time: '', type: '', frequency: '' });
   const [gapTp, setGapTp] = useState('3month');
   const saveTimeoutRef = useRef(null);
+  const saveMtTimeoutRef = useRef(null);
 
   const load = async () => { setLoading(true); try { const { data } = await supabase.from('patients').select(); if (data && Array.isArray(data)) setPatients(data.map(fromDb)); const { data: mData } = await supabase.from('meetings').select(); if (mData && Array.isArray(mData)) setMeetings(mData.map(mtFromDb)); } catch (e) { console.error(e); } setLoading(false); };
   useEffect(() => { load(); }, []);
@@ -70,12 +71,17 @@ export default function App() {
   const saveMt = async (mt) => { setSaving(true); await supabase.from('meetings').update(mtToDb(mt)).eq('id', mt.id); setSaving(false); };
   
   const debouncedSave = (pt) => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); saveTimeoutRef.current = setTimeout(() => { save(pt); }, 500); };
-  const debouncedSaveMt = (mt) => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); saveTimeoutRef.current = setTimeout(() => { saveMt(mt); }, 500); };
+  const debouncedSaveMt = (mt) => { if (saveMtTimeoutRef.current) clearTimeout(saveMtTimeoutRef.current); saveMtTimeoutRef.current = setTimeout(() => { saveMt(mt); }, 500); };
 
   const getPhase = (p) => { if (p.treatmentStartDate) return { l: "Treatment", c: "emerald" }; if (!p.parentIntakeComplete) return { l: "Diagnostic", c: "amber" }; if (p.socialWorkAssessments.length < swAssess.length) return { l: "Assessment", c: "blue" }; return Object.values(p.itp.signoffs).every(s => s.signed) ? { l: "Ready", c: "indigo" } : { l: "ITP", c: "violet" }; };
   const phaseBadge = (c) => c === 'amber' ? 'bg-amber-50 text-amber-600' : c === 'blue' ? 'bg-blue-50 text-blue-600' : c === 'violet' ? 'bg-violet-50 text-violet-600' : c === 'emerald' ? 'bg-emerald-50 text-emerald-600' : 'bg-indigo-50 text-indigo-600';
 
-  const updatePt = (id, u) => { const upd = patients.map(p => p.id === id ? { ...p, ...u } : p); setPatients(upd); const pt = upd.find(p => p.id === id); if (selPt?.id === id) setSelPt(pt); debouncedSave(pt); };
+  const updatePt = (id, u) => { 
+    setPatients(prev => prev.map(p => p.id === id ? { ...p, ...u } : p)); 
+    setSelPt(prev => prev?.id === id ? { ...prev, ...u } : prev);
+    const pt = patients.find(p => p.id === id);
+    if (pt) debouncedSave({ ...pt, ...u }); 
+  };
   const updateItp = (id, f, v) => { const pt = patients.find(p => p.id === id); updatePt(id, { itp: { ...pt.itp, [f]: v } }); };
   const toggleDiag = (id, disc, a) => { const pt = patients.find(p => p.id === id); const curr = pt.diagnosticAssessments[disc] || []; updatePt(id, { diagnosticAssessments: { ...pt.diagnosticAssessments, [disc]: curr.includes(a) ? curr.filter(x => x !== a) : [...curr, a] } }); };
   const toggleSW = (id, a) => { const pt = patients.find(p => p.id === id); const curr = pt.socialWorkAssessments || []; updatePt(id, { socialWorkAssessments: curr.includes(a) ? curr.filter(x => x !== a) : [...curr, a] }); };
@@ -100,7 +106,12 @@ export default function App() {
   const allSigned = (p) => Object.values(p.itp.signoffs).every(s => s.signed);
 
   const addMeeting = async () => { if (!newMt.patientId || !newMt.date) return; const pt = patients.find(p => p.id === parseInt(newMt.patientId)); const presetAttendees = meetingAttendees[newMt.type] || []; const freqMap = { 'Team Huddle & Case Consultation': 'Weekly', 'Comprehensive Case Review': 'Bi-Weekly', 'Outcome Evaluation & Program Review': 'Monthly', 'Clinical Supervision & Training Updates': 'Monthly', 'Family Advisory Council': 'Quarterly' }; const mt = { ...emptyMeeting(), ...newMt, patientId: parseInt(newMt.patientId), patientName: pt ? `${pt.caseId} - ${pt.firstName} ${pt.lastName}` : '', attendees: presetAttendees, frequency: freqMap[newMt.type] || newMt.frequency }; const { data } = await supabase.from('meetings').insert([mtToDb(mt)]); if (data?.[0]) setMeetings([mtFromDb(data[0]), ...meetings]); setNewMt({ patientId: '', date: '', time: '', type: '', frequency: '' }); setShowAddMt(false); };
-  const updateMt = (id, u) => { const upd = meetings.map(m => m.id === id ? { ...m, ...u } : m); setMeetings(upd); const mt = upd.find(m => m.id === id); if (selMt?.id === id) setSelMt(mt); debouncedSaveMt(mt); };
+  const updateMt = (id, u) => { 
+    setMeetings(prev => prev.map(m => m.id === id ? { ...m, ...u } : m)); 
+    setSelMt(prev => prev?.id === id ? { ...prev, ...u } : prev);
+    const mt = meetings.find(m => m.id === id);
+    if (mt) debouncedSaveMt({ ...mt, ...u }); 
+  };
   const updateMtType = (id, type) => { const presetAttendees = meetingAttendees[type] || []; const freqMap = { 'Team Huddle & Case Consultation': 'Weekly', 'Comprehensive Case Review': 'Bi-Weekly', 'Outcome Evaluation & Program Review': 'Monthly', 'Clinical Supervision & Training Updates': 'Monthly', 'Family Advisory Council': 'Quarterly' }; updateMt(id, { type, attendees: presetAttendees, frequency: freqMap[type] || '' }); };
   const toggleAttendee = (id, role) => { const m = meetings.find(x => x.id === id); const curr = m.attendees || []; const newAttendees = curr.includes(role) ? curr.filter(r => r !== role) : [...curr, role]; updateMt(id, { attendees: newAttendees }); };
   const deleteMt = async (id) => { if (confirm('Delete?')) { await supabase.from('meetings').delete().eq('id', id); setMeetings(meetings.filter(m => m.id !== id)); if (selMt?.id === id) setSelMt(null); } };
